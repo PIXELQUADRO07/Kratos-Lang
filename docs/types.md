@@ -10,6 +10,7 @@ and their literal forms are listed below.
 | `k_bool` | `true`, `false` | Implemented |
 | `k_char` | `'K'` | Partial |
 | `k_string` | `"Kratos"` | Partial |
+| `k_void` | none — return type only | Planned |
 
 ## Integer and Float Literals
 
@@ -48,6 +49,11 @@ quote as `CHAR_LITERAL`:
 Escape sequences, Unicode characters, malformed literals, and exactly-one-code-
 point validation are **Planned**.
 
+A `k_char` value must be written with single quotes. Double-quoted text (even
+one character long, e.g. `"K"`) lexes as `STRING_LITERAL`, not `CHAR_LITERAL`;
+assigning it to a `k_char` is a type mismatch to be caught during semantic
+analysis, not a lexer error.
+
 ## String Literals
 
 The current lexer scans text between double quotes as `STRING_LITERAL`:
@@ -64,3 +70,9 @@ string while updating the line counter.
 
 `k_const` is reserved by the lexer. Constant declaration syntax and immutability
 checks are **Planned**.
+
+## `k_void`
+
+`k_void` is reserved exclusively as the return type of a `craft` that produces
+no value (see [functions.md](functions.md)). It cannot be used to declare a
+variable; doing so is a semantic error once declarations are validated.

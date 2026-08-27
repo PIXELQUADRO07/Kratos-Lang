@@ -31,19 +31,56 @@ with a letter or underscore. Keywords are recognized by exact spelling.
 
 ## Grammar Draft
 
-The following is an indicative draft, not a parser contract:
+The following is an indicative draft, not a parser contract. It now includes
+the decided (but unimplemented) shape of functions and control flow; anything
+marked **Planned** elsewhere in this document is still subject to change.
 
 ```ebnf
 program       = { declaration | function } ;
+
 declaration   = [ "k_const" ] type identifier "=" expression ";" ;
 type          = "k_int" | "k_float" | "k_bool" | "k_char" | "k_string" ;
+
+function      = return_type "craft" identifier "(" [ params ] ")" block ;
+return_type   = type | "k_void" ;
+params        = param { "," param } ;
+param         = type identifier ;
+
+block         = "{" { statement } "}" ;
+statement     = declaration
+              | assignment
+              | if_stmt
+              | hold_stmt
+              | press_stmt
+              | drive_stmt
+              | sweep_stmt
+              | "snap" ";"
+              | "push" ";"
+              | "yield" [ expression ] ";"
+              | "shout" "(" expression ")" ";"
+              | "wield" string ";"
+              | expr_stmt ;
+
+assignment    = identifier "=" expression ";" ;
+expr_stmt     = expression ";" ;
+
+if_stmt       = "if" "(" expression ")" block
+                { "elif" "(" expression ")" block }
+                [ "else" block ] ;
+
+hold_stmt     = "hold" "(" expression ")" block ;
+press_stmt    = "press" block "hold" "(" expression ")" ";" ;
+drive_stmt    = "drive" "(" declaration expression ";" expression ")" block ;
+sweep_stmt    = "sweep" "(" type identifier "in" identifier ")" block ;
+
 expression    = literal | identifier | expression operator expression ;
 literal       = integer | float | boolean | character | string ;
 boolean       = "true" | "false" ;
 ```
 
-Operator precedence, function syntax, blocks, comments, escapes, and error
-recovery remain **Planned**.
+Operator precedence, blocks-as-scopes, comments, escapes, and error recovery
+remain **Planned**. `sweep`'s grammar is reserved but not runnable until a
+collection type is designed (see [control-flow.md](control-flow.md)).
 
 ## Compiler Pipeline
 
