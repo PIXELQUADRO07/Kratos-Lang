@@ -1,0 +1,128 @@
+#include "ast/ast.h"
+#include "lexer/lexer.h"
+#include "parser/parser.h"
+#include "runtime/interp.h"
+#include "semantic/semantic.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int g_failed = 0;
+static int g_passed = 0;
+
+static void expect_true(int cond, const char *name)
+{
+    if (cond) {
+        g_passed++;
+    } else {
+        g_failed++;
+        fprintf(stderr, "FAIL: %s\n", name);
+    }
+}
+
+
+static void collect_tokens(const char *source, TokenType *out, size_t max, size_t *count)
+{
+    Lexer lexer;
+    lexer_init(&lexer, source);
+    *count = 0;
+    while (*count < max) {
+        Token token = lexer_next_token(&lexer);
+        out[*count] = token.type;
+        *count += 1;
+        if (token.type == TOKEN_EOF) {
+            break;
+        }
+    }
+}
+
+
+static AstNode *parse_source(const char *source, int *had_error)
+{
+    Lexer lexer;
+    Parser parser;
+    lexer_init(&lexer, source);
+    parser_init(&parser, &lexer);
+    AstNode *program = parser_parse_program(&parser);
+    *had_error = parser.had_error;
+    return program;
+}
+
+
+int main(void)
+{
+    TokenType types[32];
+    size_t count = 0;
+
+    collect_tokens("k_int x = 1;", types, 32, &count);
+    expect_true(count >= 5, "lexer declaration token count");
+    expect_true(types[0] == TOKEN_K_INT, "lexer k_int");
+    expect_true(types[1] == TOKEN_IDENTIFIER, "lexer identifier");
+    expect_true(types[2] == TOKEN_ASSIGN, "lexer assign");
+    expect_true(types[3] == TOKEN_INTEGER, "lexer integer");
+    expect_true(types[4] == TOKEN_SEMICOLON, "lexer semicolon");
+
+    collect_tokens("a == b", types, 32, &count);
+    expect_true(types[1] == TOKEN_EQUAL, "lexer ==");
+
+    collect_tokens("a = b", types, 32, &count);
+    expect_true(types[1] == TOKEN_ASSIGN, "lexer =");
+
+    collect_tokens("craftwork", types, 32, &count);
+    expect_true(types[0] == TOKEN_IDENTIFIER, "lexer craftwork is identifier");
+
+    collect_tokens("$ comment $\nk_bool t = true;", types, 32, &count);
+    expect_true(types[0] == TOKEN_K_BOOL, "lexer skips comments");
+
+    collect_tokens("\"hi\\n\"", types, 32, &count);
+    expect_true(types[0] == TOKEN_STRING_LITERAL, "lexer string with escape");
+
+    collect_tokens("\"unterminated", types, 32, &count);
+    expect_true(types[0] == TOKEN_ERROR, "lexer unterminated string is error");
+
+    int had_error = 0;
+    AstNode *ok = parse_source(
+        "k_void craft main() { shout(\"x\"); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser valid craft");
+    expect_true(ok->as.program.declarations.count == 1, "parser one top-level decl");
+    expect_true(ok->as.program.declarations.items[0]->kind == AST_FUNC_DECL, "parser func decl");
+    ast_free(ok);
+
+    AstNode *bad = parse_source("craft Test\n", &had_error);
+    expect_true(had_error, "parser rejects bare craft");
+    ast_free(bad);
+
+    AstNode *void_var = parse_source("k_void x = 1;\n", &had_error);
+    expect_true(!had_error, "parser accepts k_void var syntactically");
+    expect_true(semantic_analyze(void_var, NULL) != 0, "semantic rejects k_void variable");
+    ast_free(void_var);
+
+    AstNode *const_assign = parse_source(
+        "k_const k_int x = 1;\nk_void craft main() { x = 2; }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser const assign");
+    expect_true(semantic_analyze(const_assign, NULL) != 0, "semantic rejects assign to k_const");
+    ast_free(const_assign);
+
+    AstNode *run = parse_source(
+        "k_int craft add(k_int a, k_int b) { yield a + b; }\n"
+        "k_void craft main() { add(1, 2); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser shout add");
+    expect_true(semantic_analyze(run, NULL) == 0, "semantic shout add");
+    expect_true(interp_run(run) == 0, "interp shout add");
+    ast_free(run);
+
+    if (g_failed != 0) {
+        fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
+        return 1;
+    }
+
+    printf("%d tests passed\n", g_passed);
+    return 0;
+}

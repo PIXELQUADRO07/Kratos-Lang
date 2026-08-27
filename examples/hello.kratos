@@ -1,0 +1,4 @@
+$ Hello, Kratos $
+k_void craft main() {
+	shout("Hello, Kratos");
+}

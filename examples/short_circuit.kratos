@@ -1,0 +1,10 @@
+k_bool craft boom() {
+	shout("boom");
+	yield false;
+}
+
+k_void craft main() {
+	if (true || boom()) {
+		shout("ok");
+	}
+}

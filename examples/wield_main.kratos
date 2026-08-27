@@ -1,0 +1,5 @@
+wield "wield_lib.kratos";
+
+k_void craft main() {
+	shout(Message);
+}
