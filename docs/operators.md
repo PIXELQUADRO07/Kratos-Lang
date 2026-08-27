@@ -1,28 +1,37 @@
 # Operators
 
-Operator tokens are reserved in the token model, but only assignment is
-currently recognized by `lexer_next_token()`.
+Operators are scanned by the lexer, parsed with precedence, type-checked, and
+evaluated by the interpreter. Mixed `k_int` and `k_float` arithmetic promotes
+to `k_float`. Assigning `k_int` to `k_float` is allowed; the reverse is not.
 
-## Implemented
+## Assignment
 
 | Spelling | Token | Meaning |
 | --- | --- | --- |
-| `=` | `ASSIGN` | Assignment syntax token |
+| `=` | `ASSIGN` | Assign to a non-`k_const` identifier |
 
-The parser and type checker do not yet attach semantics to assignment.
+Indexed assignment (`Lista[0] = 1`) is **Planned**.
 
-## Planned Operators
+## Arithmetic and Comparison
 
-The following token names are declared for future lexer and parser work:
-
-| Token names | Intended spelling |
+| Token names | Spelling |
 | --- | --- |
 | `PLUS`, `MINUS`, `STAR`, `SLASH`, `PERCENT` | `+`, `-`, `*`, `/`, `%` |
 | `EQUAL`, `NOT_EQUAL` | `==`, `!=` |
-| `LESS`, `GREATER` | `<`, `>` |
-| `LESS_EQUAL`, `GREATER_EQUAL` | `<=`, `>=` |
-| `AND`, `OR` | `&&`, `||` |
+| `LESS`, `GREATER`, `LESS_EQUAL`, `GREATER_EQUAL` | `<`, `>`, `<=`, `>=` |
 
-Precedence, associativity, short-circuit behavior, numeric promotion, and
-assignment mutability rules must be defined before these operators are treated
-as part of the language specification.
+`%` requires two `k_int` values. Division or modulo by zero is a runtime error.
+
+## Logic
+
+| Token | Spelling |
+| --- | --- |
+| `AND`, `OR` | `&&`, `\|\|` |
+| `NOT` | `not` |
+
+`&&` and `||` require `k_bool` operands and **short-circuit**.
+
+## Precedence (low to high)
+
+`||` → `&&` → `== !=` → `< > <= >=` → `+ -` → `* / %` → unary `not`/`-` →
+index `[]` and calls → primary

@@ -1,45 +1,38 @@
 # Language Overview
 
 Kratos Lang is an experimental, statically typed language centered on explicit
-declarations and action-oriented vocabulary. The current repository contains a
-lexer prototype, not a complete compiler.
+declarations and action-oriented vocabulary. Version **0.1.0** ships a lexer,
+parser, type checker, interpreter, and C emitter.
 
 ## Status Labels
 
-- **Implemented**: recognized by the current lexer and represented by a token.
-- **Partial**: a token or design exists, but validation or later compiler stages
-	are missing.
-- **Planned**: part of the intended language, but not implemented in the
-	repository.
+- **Implemented**: recognized and handled by the current compiler stages.
+- **Partial**: parsed or typed, but with known limits (see the page for the feature).
+- **Planned**: not part of 0.1.0.
 
 ## Design Direction
 
-The intended language should favor readable source, explicit types, simple
-control flow, and a small runtime model. Keywords are lowercase. User-defined
-names use identifiers beginning with a letter or underscore and may contain
-letters, digits, and underscores.
+The language favors readable source, explicit types, simple control flow, and a
+small runtime model. Keywords are lowercase. User-defined names use identifiers
+beginning with a letter or underscore and may contain letters, digits, and
+underscores.
+
+Functions are not first-class values. There is no overloading. Source is ASCII.
 
 ## Current Implementation
 
-The lexer currently implements:
-
-- whitespace skipping and line tracking;
-- identifiers and the declared keyword set;
-- `true` and `false` boolean literals;
-- integer and decimal literals;
-- character and string literal scanning;
-- `=` and `;` punctuation;
-- EOF and unknown-character tokens.
-
-The parser, AST, semantic analyzer, code generator, runtime, and automated tests
-are planned but currently empty. The token enum reserves names for future
-operators and delimiters; those names are not lexer support yet.
+- lexer: whitespace, `$ ... $` comments, keywords, literals, operators, delimiters;
+- parser and AST for the grammar in [specification.md](specification.md);
+- semantic analysis: scopes, `k_const`, types, `snap`/`push` in loops, `yield`;
+- interpreter: globals, `craft` calls, control flow, arrays, `shout`;
+- `wield "path";` at top level, resolved relative to the current file;
+- `kratosc --emit-c` writes a C translation.
 
 ## Development Stages
 
-1. Make lexical rules complete and diagnostics precise.
-2. Define an AST and parse declarations and expressions.
-3. Add name resolution and static type checking.
-4. Implement control flow, functions, and actions.
-5. Select a code generation target and define runtime behavior.
-6. Stabilize the grammar with conformance tests and versioned specifications.
+1. Lexical rules and diagnostics. **Done.**
+2. AST and parser. **Done.**
+3. Name resolution and static type checking. **Done.**
+4. Control flow, functions, and actions. **Done.**
+5. Interpreter and C backend. **Done.**
+6. Tests and a versioned specification. **Done (0.1.0).**

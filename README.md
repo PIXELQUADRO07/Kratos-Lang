@@ -6,15 +6,15 @@ of action-oriented keywords such as `craft`, `yield`, `hold`, and `press`.
 
 ## Project Status
 
-The project is currently an early lexer prototype. The lexer can tokenize
-identifiers, keywords, booleans, integers, decimal numbers, character
-literals, string literals, assignment, and semicolons. The parser, AST,
-semantic analysis, code generation, runtime, and test suite are not implemented
-yet.
+The compiler pipeline is:
 
-The token enum already reserves names for additional operators and delimiters,
-but reserved names do not mean that those tokens are supported by the lexer.
-Unsupported input currently produces `TOKEN_ERROR`.
+```text
+source -> lexer -> parser/AST -> semantic analysis -> interpreter (or --emit-c)
+```
+
+Lexer, parser, AST, type checking, a tree-walk interpreter, and a C backend
+are implemented. Automated tests cover the lexer, parser, semantic rules, and
+end-to-end example programs.
 
 ## Quick Start
 
@@ -23,23 +23,41 @@ Requirements:
 - A C11 compiler, such as GCC or Clang
 - `make` (optional; the commands below also work directly)
 
-Build and run the lexer demonstration:
+Build and run the hello example:
 
 ```sh
 make
-./kratosc
+./kratosc examples/hello.kratos
 ```
 
-The demonstration tokenizes the sample program in `src/main.c` and prints one
-token per line. To build without Make:
+CLI:
+
+```text
+kratosc [--tokens | --ast | --emit-c] [file.kratos]
+```
+
+With no flags, `kratosc` parses the file, type-checks it, and runs it. If a
+`k_void craft main()` exists, it is called after global initializers.
+
+```sh
+./kratosc --tokens examples/hello.kratos
+./kratosc --ast examples/hello.kratos
+./kratosc --emit-c examples/hello.kratos
+```
+
+Without a file, source is read from stdin.
+
+To build without Make:
 
 ```sh
 cc -std=c11 -Wall -Wextra -pedantic -Isrc \
-	src/main.c src/lexer/lexer.c -o kratosc
-./kratosc
+	src/main.c src/lexer/lexer.c src/parser/parser.c src/ast/ast.c \
+	src/utils/file.c src/semantic/semantic.c src/runtime/interp.c \
+	src/codegen/codegen.c -o kratosc
+./kratosc examples/hello.kratos
 ```
 
-Clean the generated binary with:
+Clean generated binaries with:
 
 ```sh
 make clean
@@ -48,33 +66,26 @@ make clean
 ## Current Example
 
 ```kratos
-k_int Numero = 10;
-k_float Pi = 3.14;
-k_bool Verifica = true;
-k_bool AltraVerifica = false;
-k_char Lettera = 'K';
-k_string Nome = "Kratos";
-craft Test
+k_void craft main() {
+	shout("Hello, Kratos");
+}
 ```
-
-The implemented lexer recognizes the declarations above as tokens. It does
-not parse or execute them yet.
 
 ## Repository Layout
 
 ```text
 src/
-	main.c              Lexer demonstration entry point
-	lexer/              Token definitions and lexer implementation
-	ast/                Planned abstract syntax tree
-	parser/             Planned parser
-	semantic/           Planned semantic analysis
-	codegen/            Planned code generation
-	runtime/            Planned runtime support
-	utils/              Planned shared utilities
-	tests/              Reserved test directories
-docs/                 Language notes and planned specification
-examples/             Reserved example programs
+	main.c              Compiler driver
+	lexer/              Tokens and scanner
+	parser/             Recursive-descent parser
+	ast/                Abstract syntax tree
+	semantic/           Name resolution and type checking
+	runtime/            Tree-walk interpreter
+	codegen/            C backend (`--emit-c`)
+	utils/              File helpers
+tests/                Unit tests (`make test`)
+examples/             Sample programs
+docs/                 Language notes and specification
 ```
 
 ## Documentation
@@ -87,32 +98,28 @@ examples/             Reserved example programs
 - [Functions and actions](docs/functions.md)
 - [Language specification](docs/specification.md)
 
-The documentation deliberately distinguishes implemented behavior from planned
-design. The specification is aspirational until the corresponding compiler
-stages exist.
-
 ## Testing
 
-There is no automated test suite yet. The current verification is the build and
-lexer demonstration:
-
 ```sh
-make
-./kratosc
+make test
 ```
 
-The next testing milestone is a standalone lexer test suite covering token
-boundaries, malformed literals, line tracking, and unknown characters.
+This builds `kratosc`, runs the unit tests, executes example programs, and
+compiles the C emitted from `examples/hello.kratos`.
 
 ## Roadmap
 
-1. Complete lexer punctuation, operators, comments, escapes, and diagnostics.
-2. Define the AST and implement declarations and expressions in the parser.
-3. Add symbol tables, type checking, and useful source diagnostics.
-4. Implement control flow, functions, and action semantics.
-5. Add a code generation target and a small runtime.
-6. Add automated unit, integration, and end-to-end tests.
-7. Stabilize the language specification and publish versioned releases.
+Completed in this tree:
+
+1. Lexer punctuation, operators, comments `$ ... $`, escapes, and diagnostics.
+2. AST and parser for declarations, expressions, functions, and control flow.
+3. Symbol tables, type checking, and source diagnostics.
+4. Control flow, functions, arrays, `sweep`, and `wield`.
+5. Interpreter and a C code generation target.
+6. Unit, integration, and end-to-end tests.
+7. Specification labeled **Kratos 0.1.0**.
+
+Possible later work: a bytecode VM, richer collections, and module aliases.
 
 ## Contributing
 

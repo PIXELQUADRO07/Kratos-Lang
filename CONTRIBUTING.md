@@ -1,27 +1,33 @@
 # Contributing to Kratos Lang
 
-Kratos Lang is an early-stage experimental project. Contributions that make
-the current behavior clearer, better tested, or easier to build are especially
-useful while the compiler architecture is being established.
+Kratos Lang is an experimental project. Changes that keep the compiler,
+tests, and docs aligned are especially useful.
 
 ## Before You Start
 
 Read the [README](README.md) and the relevant page in `docs/`. Check whether a
 feature is marked `Implemented`, `Partial`, or `Planned` before changing its
-behavior. Keep the implementation and documentation status aligned.
+behavior. Keep the implementation and documentation status aligned. The current
+language snapshot is **0.1.0**.
 
 ## Development Workflow
 
-Build the current prototype:
+Build:
 
 ```sh
 make
 ```
 
-Run the lexer demonstration:
+Run an example:
 
 ```sh
-./kratosc
+./kratosc examples/hello.kratos
+```
+
+Run the test suite:
+
+```sh
+make test
 ```
 
 Clean generated output:
@@ -30,9 +36,8 @@ Clean generated output:
 make clean
 ```
 
-When adding behavior, include focused tests as soon as the test harness exists.
-At minimum, manually verify the affected token or syntax and run the complete
-build before submitting a change.
+When adding behavior, include focused tests. Run `make test` before submitting
+a change.
 
 ## Coding Guidelines
 
@@ -40,8 +45,7 @@ build before submitting a change.
 - Keep changes focused on one behavior or subsystem.
 - Preserve the existing public APIs unless a design change requires otherwise.
 - Prefer clear control flow and explicit ownership of source positions.
-- Report malformed input instead of silently accepting it when diagnostics are
-	available.
+- Report malformed input instead of silently accepting it.
 - Update the relevant English documentation when syntax or semantics change.
 - Do not commit generated binaries or build output.
 
@@ -53,7 +57,6 @@ user-visible behavior, list validation commands, and call out known limitations.
 
 ## Design Changes
 
-Language syntax and semantics are still being defined. For a change that affects
-the grammar, type system, runtime model, or keyword meanings, document the
-proposal first and show how it fits the roadmap. Avoid making the lexer imply
-support for syntax that the parser cannot yet consume.
+For a change that affects the grammar, type system, runtime model, or keyword
+meanings, document the proposal in `docs/` and show how it fits version 0.1.0
+or a later snapshot.

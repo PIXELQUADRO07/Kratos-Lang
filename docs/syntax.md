@@ -1,15 +1,22 @@
 # Syntax
 
-This page describes the current lexical syntax and the intended shape of a
-Kratos program. Only the lexical rules are implemented at present.
+This page describes the lexical syntax and the shape of a Kratos program as of
+version 0.1.0.
 
 ## Source Text
 
-Source is read as a sequence of ASCII characters by the current lexer. Spaces,
-tabs, carriage returns, and newlines separate tokens. Newlines increment the
-reported source line but are not emitted as tokens.
+Source is read as a sequence of ASCII characters. Spaces, tabs, carriage returns,
+and newlines separate tokens. Newlines increment the reported source line but are
+not emitted as tokens.
 
-Comments are **Planned** and currently produce error tokens.
+Comments use matching dollar signs and may span lines:
+
+```kratos
+$ this is a comment $
+k_int Answer = 42;
+```
+
+An unclosed comment is a lexical error.
 
 ## Identifiers
 
@@ -27,31 +34,28 @@ Keywords are reserved when their complete spelling is present. For example,
 
 ## Statements
 
-The intended declaration form is:
+A declaration always has a type, a name, `=`, an initializer, and `;`:
 
 ```text
 k_int Numero = 10;
+k_const k_int Limit = 100;
+k_int[] Lista = [1, 2, 3];
 ```
 
-The lexer recognizes the declaration components as separate tokens. Parsing,
-declaration validation, and semicolon rules are **Planned**.
+Top-level items are declarations, `craft` functions, or `wield "file";`.
 
-## Recognized Punctuation
+## Punctuation and Operators
 
-| Spelling | Token | Status |
-| --- | --- | --- |
-| `=` | `ASSIGN` | Implemented |
-| `;` | `SEMICOLON` | Implemented |
-
-Additional punctuation declared by the token enum is **Planned** until lexer and
-parser support are added.
+Implemented token spellings include `=`, `==`, `!=`, `<`, `>`, `<=`, `>=`,
+`+`, `-`, `*`, `/`, `%`, `&&`, `||`, `not`, `( ) { } [ ]`, `;`, `,`, and `.`.
+A lone `!`, `&`, or `|` is a lexical error; use `not`, `&&`, and `||`.
 
 ## Example
 
 ```kratos
 k_string Name = "Kratos";
-craft Test
-```
 
-This can be tokenized by the current demonstration, but it cannot yet be parsed
-or executed.
+k_void craft main() {
+	shout(Name);
+}
+```

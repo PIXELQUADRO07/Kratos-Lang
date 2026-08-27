@@ -1,48 +1,50 @@
 # Kratos Lang Specification
 
-This document is a working specification for an experimental language. It is
-not yet a conformance standard: the repository currently implements lexical
-scanning only.
+Version **0.1.0**. This document describes the language as implemented by
+`kratosc` in this repository. Behavior marked **Planned** is not required of
+0.1.0 implementations.
 
 ## Versioning
 
-Until a first language release exists, syntax and semantics described as
-**Planned** may change. Implemented behavior is defined by the lexer sources and
-the demonstration program in `src/main.c`.
+0.1.0 is the first numbered language snapshot. Later versions may extend the
+grammar; breaking changes should bump the minor or major number once 1.0.0
+exists.
+
+Implemented behavior is defined by the compiler sources, the tests in
+`tests/` and `examples/`, and this specification.
 
 ## Lexical Model
 
-The lexer consumes source from left to right and returns tokens containing:
+The lexer consumes source from left to right and returns tokens containing a
+type, a pointer into the original source, a length, and a line number.
 
-- a token type;
-- a pointer into the original source;
-- the token length;
-- the current source line.
+Whitespace is skipped. `$ ... $` comments are skipped. Identifiers are ASCII
+alphanumeric sequences beginning with a letter or underscore. Keywords are
+recognized by exact spelling.
 
-Whitespace is skipped. Identifiers are ASCII alphanumeric sequences beginning
-with a letter or underscore. Keywords are recognized by exact spelling.
+Unterminated comments, strings, and character literals produce `TOKEN_ERROR`.
+String and character escapes `\n \t \r \0 \\ \" \'` are decoded when building
+the AST.
 
 ## Implemented Token Families
 
 - identifiers and the keyword set listed in [language.md](language.md);
-- `INTEGER`, `FLOAT`, `TRUE`, and `FALSE`;
-- `CHAR_LITERAL` and `STRING_LITERAL` scanning;
+- `INTEGER`, `FLOAT`, `TRUE`, `FALSE`;
+- `CHAR_LITERAL` and `STRING_LITERAL`;
+- operators and delimiters listed in [operators.md](operators.md) and
+  [syntax.md](syntax.md);
 - `ASSIGN`, `SEMICOLON`, `EOF`, and `ERROR`.
 
-## Grammar Draft
-
-The following is an indicative draft, not a parser contract. It now includes
-the decided (but unimplemented) shape of functions and control flow; anything
-marked **Planned** elsewhere in this document is still subject to change.
+## Grammar
 
 ```ebnf
-program       = { declaration | function } ;
+program       = { declaration | function | wield_stmt } ;
 
-declaration   = [ "k_const" ] type identifier "=" expression ";" ;
-type          = "k_int" | "k_float" | "k_bool" | "k_char" | "k_string" ;
+declaration   = [ "k_const" ] type [ "[" "]" ] identifier "=" expression ";" ;
+type          = "k_int" | "k_float" | "k_bool" | "k_char" | "k_string" | "k_void" ;
 
 function      = return_type "craft" identifier "(" [ params ] ")" block ;
-return_type   = type | "k_void" ;
+return_type   = type ;
 params        = param { "," param } ;
 param         = type identifier ;
 
@@ -58,8 +60,11 @@ statement     = declaration
               | "push" ";"
               | "yield" [ expression ] ";"
               | "shout" "(" expression ")" ";"
-              | "wield" string ";"
-              | expr_stmt ;
+              | wield_stmt
+              | expr_stmt
+              | block ;
+
+wield_stmt    = "wield" string ";" ;
 
 assignment    = identifier "=" expression ";" ;
 expr_stmt     = expression ";" ;
@@ -70,32 +75,53 @@ if_stmt       = "if" "(" expression ")" block
 
 hold_stmt     = "hold" "(" expression ")" block ;
 press_stmt    = "press" block "hold" "(" expression ")" ";" ;
-drive_stmt    = "drive" "(" declaration expression ";" expression ")" block ;
+drive_stmt    = "drive" "(" declaration expression ";" assignment_or_expr ")" block ;
 sweep_stmt    = "sweep" "(" type identifier "in" identifier ")" block ;
 
-expression    = literal | identifier | expression operator expression ;
+expression    = or_expr ;
+or_expr       = and_expr { "||" and_expr } ;
+and_expr      = equality { "&&" equality } ;
+equality      = comparison { ("==" | "!=") comparison } ;
+comparison    = additive { ("<" | ">" | "<=" | ">=") additive } ;
+additive      = multiplicative { ("+" | "-") multiplicative } ;
+multiplicative= unary { ("*" | "/" | "%") unary } ;
+unary         = ( "not" | "-" ) unary | postfix ;
+postfix       = primary { "[" expression "]" } ;
+primary       = literal | call | identifier | array_literal | "(" expression ")" ;
+call          = identifier "(" [ expression { "," expression } ] ")" ;
+array_literal = "[" [ expression { "," expression } ] "]" ;
 literal       = integer | float | boolean | character | string ;
 boolean       = "true" | "false" ;
 ```
 
-Operator precedence, blocks-as-scopes, comments, escapes, and error recovery
-remain **Planned**. `sweep`'s grammar is reserved but not runnable until a
-collection type is designed (see [control-flow.md](control-flow.md)).
-
 ## Compiler Pipeline
 
-The intended pipeline is:
-
 ```text
-source -> lexer -> parser/AST -> semantic analysis -> code generation -> runtime
+source -> lexer -> parser/AST -> semantic analysis -> interpreter
+                                              \-> --emit-c
 ```
 
-Only the lexer stage currently has implementation. The other directories are
-reserved for the stages above and need both code and tests.
+Diagnostics include a source line. Parse errors set a flag and continue with
+minimal panic recovery; the AST is not executed if that flag is set.
+
+## Semantic Rules
+
+- Blocks, `drive` initializers, and `sweep` elements introduce scopes.
+- Duplicate names in one scope are errors.
+- `k_void` is only a function return type.
+- Conditions are `k_bool`.
+- `snap` / `push` require an enclosing loop.
+- Non-void crafts must `yield` on every path (`if` needs an `else` for this).
+- Array literals must have a uniform element type matching the declaration.
+- `wield` loads another file; cycles are errors.
+
+## Runtime
+
+`kratosc` evaluates global declarations in order, then calls `main` if it is
+declared. `shout` writes to stdout with a trailing newline. `&&` / `||`
+short-circuit.
 
 ## Conformance Requirements
 
-A future implementation should provide deterministic diagnostics with source
-locations, reject malformed literals and invalid declarations, and include lexer,
-parser, semantic, integration, and runtime tests. A language version will only
-be considered stable once those behaviors are specified and tested.
+An implementation of 0.1.0 should match this grammar, the semantic rules
+above, and the tests invoked by `make test`.
