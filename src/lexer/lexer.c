@@ -1,6 +1,8 @@
 #include "lexer.h"
 
 #include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -50,9 +52,10 @@ static void skip_comment(Lexer *lexer)
         advance(lexer);
     }
 
-    /* Saltiamo il '$' di chiusura, se presente (altrimenti EOF: commento non terminato). */
     if (current_char(lexer) == '$') {
         advance(lexer);
+    } else {
+        lexer->unterminated_comment = 1;
     }
 }
 
@@ -163,6 +166,7 @@ void lexer_init(Lexer *lexer, const char *source)
     lexer->source = source;
     lexer->position = 0;
     lexer->line = 1;
+    lexer->unterminated_comment = 0;
 }
 
 static Token lexer_number(Lexer *lexer)
@@ -201,37 +205,76 @@ static Token lexer_number(Lexer *lexer)
 }
 
 
+static int is_escape_char(char c)
+{
+    return c == 'n' || c == 't' || c == 'r' || c == '0' ||
+           c == '\\' || c == '"' || c == '\'';
+}
+
+
+static int consume_escape(Lexer *lexer)
+{
+    /* Siamo sul '\\'. */
+    advance(lexer);
+    char e = current_char(lexer);
+    if (e == '\0' || !is_escape_char(e)) {
+        return 0;
+    }
+    if (e == '\n') {
+        lexer->line++;
+    }
+    advance(lexer);
+    return 1;
+}
+
+
 static Token lexer_string(Lexer *lexer)
 {
     size_t start = lexer->position;
+    size_t start_line = lexer->line;
 
-    /*
-     * Saltiamo il primo ".
-     */
     advance(lexer);
 
-    while (current_char(lexer) != '"' &&
-           current_char(lexer) != '\0') {
-
+    while (current_char(lexer) != '"' && current_char(lexer) != '\0') {
         if (current_char(lexer) == '\n') {
             lexer->line++;
+        }
+
+        if (current_char(lexer) == '\\') {
+            size_t esc_start = lexer->position;
+            if (!consume_escape(lexer)) {
+                if (current_char(lexer) != '\0') {
+                    advance(lexer);
+                }
+                return (Token){
+                    TOKEN_ERROR,
+                    lexer->source + esc_start,
+                    lexer->position - esc_start,
+                    start_line
+                };
+            }
+            continue;
         }
 
         advance(lexer);
     }
 
-    /*
-     * Saltiamo il " finale.
-     */
-    if (current_char(lexer) == '"') {
-        advance(lexer);
+    if (current_char(lexer) != '"') {
+        return (Token){
+            TOKEN_ERROR,
+            lexer->source + start,
+            lexer->position - start,
+            start_line
+        };
     }
+
+    advance(lexer);
 
     return (Token){
         TOKEN_STRING_LITERAL,
         lexer->source + start,
         lexer->position - start,
-        lexer->line
+        start_line
     };
 }
 
@@ -239,30 +282,42 @@ static Token lexer_string(Lexer *lexer)
 static Token lexer_char(Lexer *lexer)
 {
     size_t start = lexer->position;
+    size_t start_line = lexer->line;
 
-    /*
-     * Saltiamo il primo '.
-     */
     advance(lexer);
 
-    if (current_char(lexer) != '\0' &&
-        current_char(lexer) != '\n') {
-
+    if (current_char(lexer) == '\\') {
+        if (!consume_escape(lexer)) {
+            if (current_char(lexer) != '\0') {
+                advance(lexer);
+            }
+            return (Token){
+                TOKEN_ERROR,
+                lexer->source + start,
+                lexer->position - start,
+                start_line
+            };
+        }
+    } else if (current_char(lexer) != '\0' && current_char(lexer) != '\n') {
         advance(lexer);
     }
 
-    /*
-     * Saltiamo il ' finale.
-     */
-    if (current_char(lexer) == '\'') {
-        advance(lexer);
+    if (current_char(lexer) != '\'') {
+        return (Token){
+            TOKEN_ERROR,
+            lexer->source + start,
+            lexer->position - start,
+            start_line
+        };
     }
+
+    advance(lexer);
 
     return (Token){
         TOKEN_CHAR_LITERAL,
         lexer->source + start,
         lexer->position - start,
-        lexer->line
+        start_line
     };
 }
 
@@ -270,6 +325,16 @@ static Token lexer_char(Lexer *lexer)
 Token lexer_next_token(Lexer *lexer)
 {
     skip_whitespace(lexer);
+
+    if (lexer->unterminated_comment) {
+        lexer->unterminated_comment = 0;
+        return (Token){
+            TOKEN_ERROR,
+            lexer->source + lexer->position,
+            0,
+            lexer->line
+        };
+    }
 
     char c = current_char(lexer);
 
@@ -591,4 +656,72 @@ const char *token_type_name(TokenType type)
     }
 
     return "UNKNOWN";
+}
+
+
+static char decode_escape_char(char c)
+{
+    switch (c) {
+        case 'n':  return '\n';
+        case 't':  return '\t';
+        case 'r':  return '\r';
+        case '0':  return '\0';
+        case '\\': return '\\';
+        case '"':  return '"';
+        case '\'': return '\'';
+        default:   return c;
+    }
+}
+
+
+char *token_decode_string(Token token)
+{
+    if (token.length < 2) {
+        char *empty = malloc(1);
+        if (empty == NULL) {
+            fprintf(stderr, "kratos: memoria esaurita\n");
+            exit(EXIT_FAILURE);
+        }
+        empty[0] = '\0';
+        return empty;
+    }
+
+    const char *inner = token.start + 1;
+    size_t inner_length = token.length - 2;
+    char *buffer = malloc(inner_length + 1);
+    if (buffer == NULL) {
+        fprintf(stderr, "kratos: memoria esaurita\n");
+        exit(EXIT_FAILURE);
+    }
+
+    size_t out = 0;
+    for (size_t i = 0; i < inner_length; i++) {
+        if (inner[i] == '\\' && i + 1 < inner_length) {
+            buffer[out++] = decode_escape_char(inner[i + 1]);
+            i++;
+        } else {
+            buffer[out++] = inner[i];
+        }
+    }
+    buffer[out] = '\0';
+    return buffer;
+}
+
+
+int token_decode_char(Token token, char *out)
+{
+    if (token.length < 3 || token.start[0] != '\'') {
+        return 0;
+    }
+
+    if (token.start[1] == '\\') {
+        if (token.length < 4) {
+            return 0;
+        }
+        *out = decode_escape_char(token.start[2]);
+        return 1;
+    }
+
+    *out = token.start[1];
+    return 1;
 }

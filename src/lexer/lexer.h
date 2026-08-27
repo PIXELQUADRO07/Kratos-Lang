@@ -110,6 +110,7 @@ typedef struct {
     const char *source;
     size_t position;
     size_t line;
+    int unterminated_comment;
 } Lexer;
 
 
@@ -129,5 +130,16 @@ Token lexer_next_token(Lexer *lexer);
  * Converte un TokenType nel suo nome.
  */
 const char *token_type_name(TokenType type);
+
+/*
+ * Decodifica un TOKEN_STRING_LITERAL (virgolette e sequenze di escape).
+ * Il chiamante deve liberare la stringa restituita.
+ */
+char *token_decode_string(Token token);
+
+/*
+ * Decodifica un TOKEN_CHAR_LITERAL. Restituisce 1 e scrive *out, oppure 0.
+ */
+int token_decode_char(Token token, char *out);
 
 #endif
