@@ -26,52 +26,43 @@ static char *token_to_cstring(Token token)
     return buffer;
 }
 
-/*
- * Come sopra, ma per un TOKEN_STRING_LITERAL: il token include le virgolette
- * di apertura/chiusura ("Kratos" ha length 8), che qui vengono tolte.
- */
 static char *token_to_string_value(Token token)
 {
-    size_t inner_length = token.length >= 2 ? token.length - 2 : 0;
-    char *buffer = malloc(inner_length + 1);
-    if (buffer == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita durante il parsing\n");
-        exit(EXIT_FAILURE);
-    }
-    memcpy(buffer, token.start + 1, inner_length);
-    buffer[inner_length] = '\0';
-    return buffer;
+    return token_decode_string(token);
 }
 
-/*
- * Estrae il carattere da un TOKEN_CHAR_LITERAL ('K' ha length 3: apice,
- * carattere, apice). Un letterale malformato (senza carattere o senza
- * apice di chiusura) restituisce '\0'.
- */
 static char token_to_char_value(Token token)
 {
-    if (token.length < 2) {
+    char value = '\0';
+    if (!token_decode_char(token, &value)) {
         return '\0';
     }
-    return token.start[1];
+    return value;
 }
 
 
 /* --- Stato del parser --- */
 
+static void error_at(Parser *parser, Token token, const char *message);
+
 static void advance_token(Parser *parser)
 {
     parser->previous = parser->current;
     parser->current = lexer_next_token(parser->lexer);
+    if (parser->current.type == TOKEN_ERROR) {
+        error_at(parser, parser->current, "token non valido");
+    }
 }
 
 void parser_init(Parser *parser, Lexer *lexer)
 {
     parser->lexer = lexer;
     parser->had_error = 0;
-    /* previous non e' ancora significativo finche' non avanziamo una volta. */
     parser->current = lexer_next_token(lexer);
     parser->previous = parser->current;
+    if (parser->current.type == TOKEN_ERROR) {
+        error_at(parser, parser->current, "token non valido");
+    }
 }
 
 static int check(Parser *parser, TokenType type)
@@ -735,6 +726,10 @@ static AstNode *parse_function_decl(Parser *parser, KratosType return_type, size
 static AstNode *parse_top_level(Parser *parser)
 {
     size_t line = parser->current.line;
+
+    if (check(parser, TOKEN_WIELD)) {
+        return parse_wield_stmt(parser);
+    }
 
     int is_const = match(parser, TOKEN_K_CONST);
     KratosType type = parse_type(parser);
