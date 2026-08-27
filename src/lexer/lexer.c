@@ -18,6 +18,45 @@ static void advance(Lexer *lexer)
 }
 
 
+/*
+ * Se il carattere corrente e' 'expected', lo consuma e restituisce 1.
+ * Altrimenti non consuma nulla e restituisce 0. Usata per gli operatori a
+ * due caratteri (==, !=, <=, >=, &&, ||).
+ */
+static int match_char(Lexer *lexer, char expected)
+{
+    if (current_char(lexer) != expected) {
+        return 0;
+    }
+    advance(lexer);
+    return 1;
+}
+
+
+/*
+ * Commento: $ ... $. Simmetrico, senza bisogno di una forma diversa per
+ * riga singola/multi-riga: il commento finisce al prossimo '$', anche se
+ * nel mezzo ci sono newline (che comunque aggiornano il contatore riga).
+ */
+static void skip_comment(Lexer *lexer)
+{
+    /* Saltiamo il '$' di apertura. */
+    advance(lexer);
+
+    while (current_char(lexer) != '$' && current_char(lexer) != '\0') {
+        if (current_char(lexer) == '\n') {
+            lexer->line++;
+        }
+        advance(lexer);
+    }
+
+    /* Saltiamo il '$' di chiusura, se presente (altrimenti EOF: commento non terminato). */
+    if (current_char(lexer) == '$') {
+        advance(lexer);
+    }
+}
+
+
 static void skip_whitespace(Lexer *lexer)
 {
     while (1) {
@@ -30,6 +69,9 @@ static void skip_whitespace(Lexer *lexer)
         else if (c == '\n') {
             lexer->line++;
             advance(lexer);
+        }
+        else if (c == '$') {
+            skip_comment(lexer);
         }
         else {
             break;
@@ -58,6 +100,12 @@ static TokenType identifier_type(const char *start, size_t length)
     if (length == 7 && strncmp(start, "k_const", 7) == 0)
         return TOKEN_K_CONST;
 
+    if (length == 6 && strncmp(start, "k_void", 6) == 0)
+        return TOKEN_K_VOID;
+
+    if (length == 3 && strncmp(start, "not", 3) == 0)
+        return TOKEN_NOT;
+
     if (length == 2 && strncmp(start, "if", 2) == 0)
         return TOKEN_IF;
 
@@ -84,6 +132,9 @@ static TokenType identifier_type(const char *start, size_t length)
 
     if (length == 4 && strncmp(start, "push", 4) == 0)
         return TOKEN_PUSH;
+
+    if (length == 2 && strncmp(start, "in", 2) == 0)
+        return TOKEN_IN;
 
     if (length == 5 && strncmp(start, "craft", 5) == 0)
         return TOKEN_CRAFT;
@@ -270,42 +321,6 @@ Token lexer_next_token(Lexer *lexer)
     }
 
 
-    /*
-     * Per ora riconosciamo solo '='.
-     */
-    if (c == '=') {
-
-        size_t start = lexer->position;
-
-        advance(lexer);
-
-        return (Token){
-            TOKEN_ASSIGN,
-            lexer->source + start,
-            1,
-            lexer->line
-        };
-    }
-
-
-    /*
-     * Punto e virgola.
-     */
-    if (c == ';') {
-
-        size_t start = lexer->position;
-
-        advance(lexer);
-
-        return (Token){
-            TOKEN_SEMICOLON,
-            lexer->source + start,
-            1,
-            lexer->line
-        };
-    }
-
-
     if (isdigit((unsigned char)c)) {
         return lexer_number(lexer);
     }
@@ -322,20 +337,89 @@ Token lexer_next_token(Lexer *lexer)
 
 
     /*
-     * Carattere non riconosciuto.
-     *
-     * Lo consumiamo e restituiamo TOKEN_ERROR.
+     * Operatori e simboli, in ordine dal piu' lungo al piu' corto quando
+     * condividono il primo carattere (es. "==" prima di "=").
      */
-    Token token = {
-        TOKEN_ERROR,
-        lexer->source + lexer->position,
-        1,
-        lexer->line
-    };
+    {
+        size_t start = lexer->position;
+        TokenType type;
 
-    advance(lexer);
+        switch (c) {
 
-    return token;
+            case '=':
+                advance(lexer);
+                type = match_char(lexer, '=') ? TOKEN_EQUAL : TOKEN_ASSIGN;
+                break;
+
+            case '!':
+                advance(lexer);
+                if (match_char(lexer, '=')) {
+                    type = TOKEN_NOT_EQUAL;
+                    break;
+                }
+                /* '!' da solo non e' un operatore valido: la negazione logica e' "not". */
+                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+
+            case '<':
+                advance(lexer);
+                type = match_char(lexer, '=') ? TOKEN_LESS_EQUAL : TOKEN_LESS;
+                break;
+
+            case '>':
+                advance(lexer);
+                type = match_char(lexer, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER;
+                break;
+
+            case '&':
+                advance(lexer);
+                if (match_char(lexer, '&')) {
+                    type = TOKEN_AND;
+                    break;
+                }
+                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+
+            case '|':
+                advance(lexer);
+                if (match_char(lexer, '|')) {
+                    type = TOKEN_OR;
+                    break;
+                }
+                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+
+            case '+': advance(lexer); type = TOKEN_PLUS; break;
+            case '-': advance(lexer); type = TOKEN_MINUS; break;
+            case '*': advance(lexer); type = TOKEN_STAR; break;
+            case '/': advance(lexer); type = TOKEN_SLASH; break;
+            case '%': advance(lexer); type = TOKEN_PERCENT; break;
+
+            case '(': advance(lexer); type = TOKEN_LPAREN; break;
+            case ')': advance(lexer); type = TOKEN_RPAREN; break;
+            case '{': advance(lexer); type = TOKEN_LBRACE; break;
+            case '}': advance(lexer); type = TOKEN_RBRACE; break;
+            case '[': advance(lexer); type = TOKEN_LBRACKET; break;
+            case ']': advance(lexer); type = TOKEN_RBRACKET; break;
+
+            case ';': advance(lexer); type = TOKEN_SEMICOLON; break;
+            case ',': advance(lexer); type = TOKEN_COMMA; break;
+            case '.': advance(lexer); type = TOKEN_DOT; break;
+
+            default:
+                /*
+                 * Carattere non riconosciuto.
+                 *
+                 * Lo consumiamo e restituiamo TOKEN_ERROR.
+                 */
+                advance(lexer);
+                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+        }
+
+        return (Token){
+            type,
+            lexer->source + start,
+            lexer->position - start,
+            lexer->line
+        };
+    }
 }
 
 
@@ -370,6 +454,9 @@ const char *token_type_name(TokenType type)
         case TOKEN_K_CONST:
             return "K_CONST";
 
+        case TOKEN_K_VOID:
+            return "K_VOID";
+
         case TOKEN_IF:
             return "IF";
 
@@ -396,6 +483,9 @@ const char *token_type_name(TokenType type)
 
         case TOKEN_PUSH:
             return "PUSH";
+
+        case TOKEN_IN:
+            return "IN";
 
         case TOKEN_CRAFT:
             return "CRAFT";
@@ -468,6 +558,9 @@ const char *token_type_name(TokenType type)
 
         case TOKEN_OR:
             return "OR";
+
+        case TOKEN_NOT:
+            return "NOT";
 
         case TOKEN_LPAREN:
             return "LPAREN";

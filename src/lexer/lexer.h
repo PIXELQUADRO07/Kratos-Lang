@@ -19,6 +19,7 @@ typedef enum {
     TOKEN_K_CHAR,
     TOKEN_K_STRING,
     TOKEN_K_CONST,
+    TOKEN_K_VOID,
 
     TOKEN_IF,
     TOKEN_ELIF,
@@ -30,6 +31,7 @@ typedef enum {
     TOKEN_SWEEP,
     TOKEN_SNAP,
     TOKEN_PUSH,
+    TOKEN_IN,
 
     TOKEN_CRAFT,
     TOKEN_YIELD,
@@ -61,6 +63,7 @@ typedef enum {
 
     TOKEN_AND,
     TOKEN_OR,
+    TOKEN_NOT,
 
     /* Simboli */
     TOKEN_LPAREN,
