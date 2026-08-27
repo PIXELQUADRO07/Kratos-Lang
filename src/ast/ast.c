@@ -82,10 +82,11 @@ AstNode *ast_new_program(size_t line)
     return node;
 }
 
-AstNode *ast_new_var_decl(size_t line, int is_const, KratosType type, const char *name, AstNode *initializer)
+AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *name, AstNode *initializer)
 {
     AstNode *node = new_node(AST_VAR_DECL, line);
     node->as.var_decl.is_const = is_const;
+    node->as.var_decl.is_array = is_array;
     node->as.var_decl.type = type;
     node->as.var_decl.name = duplicate_string(name);
     node->as.var_decl.initializer = initializer;
@@ -279,6 +280,29 @@ AstNode *ast_new_call_expr(size_t line, const char *callee)
     return node;
 }
 
+AstNode *ast_new_array_literal(size_t line)
+{
+    AstNode *node = new_node(AST_ARRAY_LITERAL, line);
+    ast_node_list_init(&node->as.array_literal.elements);
+    return node;
+}
+
+AstNode *ast_new_index_expr(size_t line, AstNode *array, AstNode *index)
+{
+    AstNode *node = new_node(AST_INDEX_EXPR, line);
+    node->as.index_expr.array = array;
+    node->as.index_expr.index = index;
+    return node;
+}
+
+AstNode *ast_new_unary_expr(size_t line, TokenType operator, AstNode *operand)
+{
+    AstNode *node = new_node(AST_UNARY_EXPR, line);
+    node->as.unary_expr.operator = operator;
+    node->as.unary_expr.operand = operand;
+    return node;
+}
+
 /* --- Distruzione --- */
 
 void ast_free(AstNode *node)
@@ -388,6 +412,19 @@ void ast_free(AstNode *node)
             free(node->as.call_expr.callee);
             ast_node_list_free(&node->as.call_expr.arguments);
             break;
+
+        case AST_ARRAY_LITERAL:
+            ast_node_list_free(&node->as.array_literal.elements);
+            break;
+
+        case AST_INDEX_EXPR:
+            ast_free(node->as.index_expr.array);
+            ast_free(node->as.index_expr.index);
+            break;
+
+        case AST_UNARY_EXPR:
+            ast_free(node->as.unary_expr.operand);
+            break;
     }
 
     free(node);
@@ -435,10 +472,11 @@ void ast_print(const AstNode *node, int indent)
 
         case AST_VAR_DECL:
             printf(
-                "VarDecl %s%s : %s\n",
+                "VarDecl %s%s : %s%s\n",
                 node->as.var_decl.is_const ? "const " : "",
                 node->as.var_decl.name,
-                kratos_type_name(node->as.var_decl.type)
+                kratos_type_name(node->as.var_decl.type),
+                node->as.var_decl.is_array ? "[]" : ""
             );
             ast_print(node->as.var_decl.initializer, indent + 1);
             break;
@@ -583,6 +621,24 @@ void ast_print(const AstNode *node, int indent)
             for (size_t i = 0; i < node->as.call_expr.arguments.count; i++) {
                 ast_print(node->as.call_expr.arguments.items[i], indent + 1);
             }
+            break;
+
+        case AST_ARRAY_LITERAL:
+            printf("ArrayLiteral\n");
+            for (size_t i = 0; i < node->as.array_literal.elements.count; i++) {
+                ast_print(node->as.array_literal.elements.items[i], indent + 1);
+            }
+            break;
+
+        case AST_INDEX_EXPR:
+            printf("Index\n");
+            ast_print(node->as.index_expr.array, indent + 1);
+            ast_print(node->as.index_expr.index, indent + 1);
+            break;
+
+        case AST_UNARY_EXPR:
+            printf("Unary %s\n", token_type_name(node->as.unary_expr.operator));
+            ast_print(node->as.unary_expr.operand, indent + 1);
             break;
     }
 }

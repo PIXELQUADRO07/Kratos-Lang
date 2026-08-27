@@ -100,6 +100,15 @@ typedef enum {
     /* literal = integer | float | boolean | character | string ; */
     AST_LITERAL_EXPR,
 
+    /* "[" [ expression { "," expression } ] "]" : letterale di array, es. [1, 2, 3] */
+    AST_ARRAY_LITERAL,
+
+    /* identifier "[" expression "]" : accesso a un elemento, es. Lista[0] */
+    AST_INDEX_EXPR,
+
+    /* ("not" | "-") expression : negazione logica o aritmetica */
+    AST_UNARY_EXPR,
+
     /*
      * Non ancora presente nella grammatica formale, ma la sintassi di
      * chiamata e' gia' decisa in docs/functions.md ("add(1, 2)"): riservato
@@ -154,6 +163,7 @@ struct AstNode {
         /* AST_VAR_DECL */
         struct {
             int is_const;
+            int is_array; /* 1 per "k_type[] nome = ...;" */
             KratosType type;
             char *name;
             AstNode *initializer; /* sempre presente: la grammatica richiede "= expression" */
@@ -273,13 +283,30 @@ struct AstNode {
             char *callee;
             AstNodeList arguments;
         } call_expr;
+
+        /* AST_ARRAY_LITERAL */
+        struct {
+            AstNodeList elements;
+        } array_literal;
+
+        /* AST_INDEX_EXPR */
+        struct {
+            AstNode *array; /* tipicamente AST_IDENTIFIER_EXPR */
+            AstNode *index;
+        } index_expr;
+
+        /* AST_UNARY_EXPR */
+        struct {
+            TokenType operator; /* TOKEN_NOT o TOKEN_MINUS */
+            AstNode *operand;
+        } unary_expr;
     } as;
 };
 
 /* --- Costruttori: allocano il nodo e ne impostano kind + line. --- */
 
 AstNode *ast_new_program(size_t line);
-AstNode *ast_new_var_decl(size_t line, int is_const, KratosType type, const char *name, AstNode *initializer);
+AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *name, AstNode *initializer);
 AstNode *ast_new_func_decl(size_t line, KratosType return_type, const char *name, AstNode *body);
 AstNode *ast_new_param(size_t line, KratosType type, const char *name);
 AstNode *ast_new_block(size_t line);
@@ -304,6 +331,9 @@ AstNode *ast_new_literal_bool(size_t line, int value);
 AstNode *ast_new_literal_char(size_t line, char value);
 AstNode *ast_new_literal_string(size_t line, const char *value);
 AstNode *ast_new_call_expr(size_t line, const char *callee);
+AstNode *ast_new_array_literal(size_t line);
+AstNode *ast_new_index_expr(size_t line, AstNode *array, AstNode *index);
+AstNode *ast_new_unary_expr(size_t line, TokenType operator, AstNode *operand);
 
 /*
  * Libera ricorsivamente un nodo e tutti i suoi figli.
