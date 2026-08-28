@@ -17,7 +17,8 @@ typedef enum {
     KRATOS_TYPE_BOOL,
     KRATOS_TYPE_CHAR,
     KRATOS_TYPE_STRING,
-    KRATOS_TYPE_VOID
+    KRATOS_TYPE_VOID,
+    KRATOS_TYPE_RECORD
 } KratosType;
 
 
@@ -79,6 +80,17 @@ typedef enum {
 
     /* "wield" string ";" */
     AST_WIELD_STMT,
+
+    /* record declaration */
+    AST_RECORD_DECL,
+    AST_RECORD_FIELD,
+
+    /* record literal */
+    AST_RECORD_LITERAL,
+    AST_FIELD_INIT,
+
+    /* member access expr.member */
+    AST_MEMBER_EXPR,
 
     /*
      * assignment = identifier "=" expression ";" ;
@@ -166,6 +178,7 @@ struct AstNode {
             int is_const;
             int is_array; /* profondita': 1 per "k_type[]", 2 per "k_type[][]" */
             KratosType type;
+            char *record_name;
             char *name;
             AstNode *initializer; /* sempre presente: la grammatica richiede "= expression" */
         } var_decl;
@@ -173,6 +186,7 @@ struct AstNode {
         /* AST_FUNC_DECL */
         struct {
             KratosType return_type;
+            char *return_record_name;
             char *name;
             AstNodeList params; /* elementi di kind AST_PARAM */
             AstNode *body;      /* AST_BLOCK */
@@ -181,6 +195,8 @@ struct AstNode {
         /* AST_PARAM */
         struct {
             KratosType type;
+            int is_array;
+            char *record_name;
             char *name;
         } param;
 
@@ -224,10 +240,43 @@ struct AstNode {
         /* AST_SWEEP_STMT */
         struct {
             KratosType element_type;
+            char *element_record_name;
             char *element_name;
             char *collection_name;
             AstNode *body; /* AST_BLOCK */
         } sweep_stmt;
+
+        /* AST_RECORD_DECL */
+        struct {
+            char *name;
+            AstNodeList fields; /* AST_RECORD_FIELD */
+        } record_decl;
+
+        /* AST_RECORD_FIELD */
+        struct {
+            KratosType type;
+            int is_array;
+            char *record_name;
+            char *name;
+        } record_field;
+
+        /* AST_RECORD_LITERAL */
+        struct {
+            char *name;
+            AstNodeList fields; /* AST_FIELD_INIT */
+        } record_literal;
+
+        /* AST_FIELD_INIT */
+        struct {
+            char *name;
+            AstNode *value;
+        } field_init;
+
+        /* AST_MEMBER_EXPR */
+        struct {
+            AstNode *target;
+            char *member;
+        } member_expr;
 
         /* AST_YIELD_STMT */
         struct {
@@ -307,16 +356,21 @@ struct AstNode {
 /* --- Costruttori: allocano il nodo e ne impostano kind + line. --- */
 
 AstNode *ast_new_program(size_t line);
-AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *name, AstNode *initializer);
-AstNode *ast_new_func_decl(size_t line, KratosType return_type, const char *name, AstNode *body);
-AstNode *ast_new_param(size_t line, KratosType type, const char *name);
+AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *record_name, const char *name, AstNode *initializer);
+AstNode *ast_new_func_decl(size_t line, KratosType return_type, const char *return_record_name, const char *name, AstNode *body);
+AstNode *ast_new_param(size_t line, KratosType type, int is_array, const char *record_name, const char *name);
+AstNode *ast_new_record_decl(size_t line, const char *name);
+AstNode *ast_new_record_field(size_t line, KratosType type, int is_array, const char *record_name, const char *name);
+AstNode *ast_new_record_literal(size_t line, const char *name);
+AstNode *ast_new_field_init(size_t line, const char *name, AstNode *value);
+AstNode *ast_new_member_expr(size_t line, AstNode *target, const char *member);
 AstNode *ast_new_block(size_t line);
 AstNode *ast_new_if_stmt(size_t line);
 AstNode *ast_new_cond_branch(size_t line, AstNode *condition, AstNode *body);
 AstNode *ast_new_hold_stmt(size_t line, AstNode *condition, AstNode *body);
 AstNode *ast_new_press_stmt(size_t line, AstNode *body, AstNode *condition);
 AstNode *ast_new_drive_stmt(size_t line, AstNode *init, AstNode *condition, AstNode *step, AstNode *body);
-AstNode *ast_new_sweep_stmt(size_t line, KratosType element_type, const char *element_name, const char *collection_name, AstNode *body);
+AstNode *ast_new_sweep_stmt(size_t line, KratosType element_type, const char *element_record_name, const char *element_name, const char *collection_name, AstNode *body);
 AstNode *ast_new_snap_stmt(size_t line);
 AstNode *ast_new_push_stmt(size_t line);
 AstNode *ast_new_yield_stmt(size_t line, AstNode *value);

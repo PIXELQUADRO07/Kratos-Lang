@@ -94,32 +94,78 @@ AstNode *ast_new_program(size_t line)
     return node;
 }
 
-AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *name, AstNode *initializer)
+AstNode *ast_new_var_decl(size_t line, int is_const, int is_array, KratosType type, const char *record_name, const char *name, AstNode *initializer)
 {
     AstNode *node = new_node(AST_VAR_DECL, line);
     node->as.var_decl.is_const = is_const;
     node->as.var_decl.is_array = is_array;
     node->as.var_decl.type = type;
+    node->as.var_decl.record_name = duplicate_string(record_name);
     node->as.var_decl.name = duplicate_string(name);
     node->as.var_decl.initializer = initializer;
     return node;
 }
 
-AstNode *ast_new_func_decl(size_t line, KratosType return_type, const char *name, AstNode *body)
+AstNode *ast_new_func_decl(size_t line, KratosType return_type, const char *return_record_name, const char *name, AstNode *body)
 {
     AstNode *node = new_node(AST_FUNC_DECL, line);
     node->as.func_decl.return_type = return_type;
+    node->as.func_decl.return_record_name = duplicate_string(return_record_name);
     node->as.func_decl.name = duplicate_string(name);
     ast_node_list_init(&node->as.func_decl.params);
     node->as.func_decl.body = body;
     return node;
 }
 
-AstNode *ast_new_param(size_t line, KratosType type, const char *name)
+AstNode *ast_new_param(size_t line, KratosType type, int is_array, const char *record_name, const char *name)
 {
     AstNode *node = new_node(AST_PARAM, line);
     node->as.param.type = type;
+    node->as.param.is_array = is_array;
+    node->as.param.record_name = duplicate_string(record_name);
     node->as.param.name = duplicate_string(name);
+    return node;
+}
+
+AstNode *ast_new_record_decl(size_t line, const char *name)
+{
+    AstNode *node = new_node(AST_RECORD_DECL, line);
+    node->as.record_decl.name = duplicate_string(name);
+    ast_node_list_init(&node->as.record_decl.fields);
+    return node;
+}
+
+AstNode *ast_new_record_field(size_t line, KratosType type, int is_array, const char *record_name, const char *name)
+{
+    AstNode *node = new_node(AST_RECORD_FIELD, line);
+    node->as.record_field.type = type;
+    node->as.record_field.is_array = is_array;
+    node->as.record_field.record_name = duplicate_string(record_name);
+    node->as.record_field.name = duplicate_string(name);
+    return node;
+}
+
+AstNode *ast_new_record_literal(size_t line, const char *name)
+{
+    AstNode *node = new_node(AST_RECORD_LITERAL, line);
+    node->as.record_literal.name = duplicate_string(name);
+    ast_node_list_init(&node->as.record_literal.fields);
+    return node;
+}
+
+AstNode *ast_new_field_init(size_t line, const char *name, AstNode *value)
+{
+    AstNode *node = new_node(AST_FIELD_INIT, line);
+    node->as.field_init.name = duplicate_string(name);
+    node->as.field_init.value = value;
+    return node;
+}
+
+AstNode *ast_new_member_expr(size_t line, AstNode *target, const char *member)
+{
+    AstNode *node = new_node(AST_MEMBER_EXPR, line);
+    node->as.member_expr.target = target;
+    node->as.member_expr.member = duplicate_string(member);
     return node;
 }
 
@@ -172,10 +218,11 @@ AstNode *ast_new_drive_stmt(size_t line, AstNode *init, AstNode *condition, AstN
     return node;
 }
 
-AstNode *ast_new_sweep_stmt(size_t line, KratosType element_type, const char *element_name, const char *collection_name, AstNode *body)
+AstNode *ast_new_sweep_stmt(size_t line, KratosType element_type, const char *element_record_name, const char *element_name, const char *collection_name, AstNode *body)
 {
     AstNode *node = new_node(AST_SWEEP_STMT, line);
     node->as.sweep_stmt.element_type = element_type;
+    node->as.sweep_stmt.element_record_name = duplicate_string(element_record_name);
     node->as.sweep_stmt.element_name = duplicate_string(element_name);
     node->as.sweep_stmt.collection_name = duplicate_string(collection_name);
     node->as.sweep_stmt.body = body;
@@ -330,17 +377,45 @@ void ast_free(AstNode *node)
 
         case AST_VAR_DECL:
             free(node->as.var_decl.name);
+            free(node->as.var_decl.record_name);
             ast_free(node->as.var_decl.initializer);
             break;
 
         case AST_FUNC_DECL:
             free(node->as.func_decl.name);
+            free(node->as.func_decl.return_record_name);
             ast_node_list_free(&node->as.func_decl.params);
             ast_free(node->as.func_decl.body);
             break;
 
         case AST_PARAM:
             free(node->as.param.name);
+            free(node->as.param.record_name);
+            break;
+
+        case AST_RECORD_DECL:
+            free(node->as.record_decl.name);
+            ast_node_list_free(&node->as.record_decl.fields);
+            break;
+
+        case AST_RECORD_FIELD:
+            free(node->as.record_field.record_name);
+            free(node->as.record_field.name);
+            break;
+
+        case AST_RECORD_LITERAL:
+            free(node->as.record_literal.name);
+            ast_node_list_free(&node->as.record_literal.fields);
+            break;
+
+        case AST_FIELD_INIT:
+            free(node->as.field_init.name);
+            ast_free(node->as.field_init.value);
+            break;
+
+        case AST_MEMBER_EXPR:
+            ast_free(node->as.member_expr.target);
+            free(node->as.member_expr.member);
             break;
 
         case AST_BLOCK:
@@ -375,6 +450,7 @@ void ast_free(AstNode *node)
             break;
 
         case AST_SWEEP_STMT:
+            free(node->as.sweep_stmt.element_record_name);
             free(node->as.sweep_stmt.element_name);
             free(node->as.sweep_stmt.collection_name);
             ast_free(node->as.sweep_stmt.body);
@@ -453,6 +529,7 @@ const char *kratos_type_name(KratosType type)
         case KRATOS_TYPE_CHAR:   return "k_char";
         case KRATOS_TYPE_STRING: return "k_string";
         case KRATOS_TYPE_VOID:   return "k_void";
+        case KRATOS_TYPE_RECORD: return "record";
     }
     return "?";
 }
@@ -647,6 +724,38 @@ void ast_print(const AstNode *node, int indent)
             printf("Index\n");
             ast_print(node->as.index_expr.array, indent + 1);
             ast_print(node->as.index_expr.index, indent + 1);
+            break;
+
+        case AST_RECORD_DECL:
+            printf("RecordDecl %s\n", node->as.record_decl.name);
+            for (size_t i = 0; i < node->as.record_decl.fields.count; i++) {
+                ast_print(node->as.record_decl.fields.items[i], indent + 1);
+            }
+            break;
+
+        case AST_RECORD_FIELD:
+            printf("RecordField %s : %s%s\n",
+                   node->as.record_field.name,
+                   node->as.record_field.type == KRATOS_TYPE_RECORD && node->as.record_field.record_name != NULL
+                       ? node->as.record_field.record_name : kratos_type_name(node->as.record_field.type),
+                   node->as.record_field.is_array ? "[]" : "");
+            break;
+
+        case AST_RECORD_LITERAL:
+            printf("RecordLiteral %s\n", node->as.record_literal.name);
+            for (size_t i = 0; i < node->as.record_literal.fields.count; i++) {
+                ast_print(node->as.record_literal.fields.items[i], indent + 1);
+            }
+            break;
+
+        case AST_FIELD_INIT:
+            printf("FieldInit %s =\n", node->as.field_init.name);
+            ast_print(node->as.field_init.value, indent + 1);
+            break;
+
+        case AST_MEMBER_EXPR:
+            printf("Member .%s\n", node->as.member_expr.member);
+            ast_print(node->as.member_expr.target, indent + 1);
             break;
 
         case AST_UNARY_EXPR:
