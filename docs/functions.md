@@ -12,6 +12,8 @@ Function syntax is **Implemented**.
 `len(value)` is a built-in expression returning a `k_int` for strings and
 arrays.
 
+`slice(text, start, end)` returns the string range `[start, end)`.
+
 String concatenation uses `+`, for example `"hello, " + name`.
 
 ## Function Declaration

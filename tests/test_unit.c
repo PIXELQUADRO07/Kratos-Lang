@@ -254,6 +254,16 @@ int main(void)
     expect_true(interp_run(nested) == 0, "interp nested arrays");
     ast_free(nested);
 
+    AstNode *sliced = parse_source(
+        "k_string text = \"Kratos\";\n"
+        "k_void craft main() { shout(slice(text, 1, 4)); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser string slice");
+    expect_true(semantic_analyze(sliced, NULL) == 0, "semantic string slice");
+    expect_true(interp_run(sliced) == 0, "interp string slice");
+    ast_free(sliced);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

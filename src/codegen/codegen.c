@@ -194,6 +194,8 @@ static void emit_expr(Emitter *e, const AstNode *node)
         case AST_CALL_EXPR:
             if (strcmp(node->as.call_expr.callee, "len") == 0) {
                 fputs("k_len(", e->out);
+            } else if (strcmp(node->as.call_expr.callee, "slice") == 0) {
+                fputs("k_slice(", e->out);
             } else {
                 fprintf(e->out, "kfn_%s(", node->as.call_expr.callee);
             }
@@ -512,6 +514,16 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "    if (!result) exit(EXIT_FAILURE);\n"
         "    memcpy(result, left ? left : \"\", left_len);\n"
         "    memcpy(result + left_len, right ? right : \"\", right_len + 1);\n"
+        "    return result;\n"
+        "}\n"
+        "const char *k_slice(const char *text, int64_t start, int64_t end) {\n"
+        "    size_t length = strlen(text ? text : \"\");\n"
+        "    if (start < 0 || end < start || (size_t)end > length) exit(EXIT_FAILURE);\n"
+        "    size_t count = (size_t)(end - start);\n"
+        "    char *result = malloc(count + 1);\n"
+        "    if (!result) exit(EXIT_FAILURE);\n"
+        "    memcpy(result, (text ? text : \"\") + start, count);\n"
+        "    result[count] = '\\0';\n"
         "    return result;\n"
         "}\n"
         "double k_plus_numeric(double left, double right) { return left + right; }\n"

@@ -61,6 +61,8 @@ test: $(TARGET) $(TEST_TARGET)
 	/tmp/kratos_concat_c | grep -q '^hello, Kratos$$'
 	printf '%s\n' 'k_int[][] matrix = [[1, 2], [3, 4]];' 'k_void craft main() { matrix[1][0] = 8; shout(matrix[1][0]); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_nested_c
 	/tmp/kratos_nested_c | grep -q '^8$$'
+	printf '%s\n' 'k_string text = "Kratos";' 'k_void craft main() { shout(slice(text, 1, 4)); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_slice_c
+	/tmp/kratos_slice_c | grep -q '^rat$$'
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratosc_test
+	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratos_slice_c /tmp/kratosc_test

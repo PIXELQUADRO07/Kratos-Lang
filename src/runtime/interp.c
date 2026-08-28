@@ -599,6 +599,40 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 value_free(argument);
                 return result;
             }
+            if (strcmp(node->as.call_expr.callee, "slice") == 0) {
+                if (node->as.call_expr.arguments.count != 3) {
+                    runtime_error(interp, node->line, "slice richiede tre argomenti");
+                    return val_void();
+                }
+                Value source = eval_expr(interp, node->as.call_expr.arguments.items[0]);
+                Value start = eval_expr(interp, node->as.call_expr.arguments.items[1]);
+                Value end = eval_expr(interp, node->as.call_expr.arguments.items[2]);
+                const char *text = source.kind == VAL_STRING && source.as.s != NULL ? source.as.s : "";
+                size_t length = strlen(text);
+                if (source.kind != VAL_STRING || start.kind != VAL_INT || end.kind != VAL_INT ||
+                    start.as.i < 0 || end.as.i < start.as.i || (size_t)end.as.i > length) {
+                    runtime_error(interp, node->line, "intervallo di slice non valido");
+                    value_free(source);
+                    value_free(start);
+                    value_free(end);
+                    return val_void();
+                }
+                size_t slice_length = (size_t)(end.as.i - start.as.i);
+                char *result_text = malloc(slice_length + 1);
+                if (result_text == NULL) {
+                    fprintf(stderr, "kratos: memoria esaurita\n");
+                    exit(EXIT_FAILURE);
+                }
+                memcpy(result_text, text + start.as.i, slice_length);
+                result_text[slice_length] = '\0';
+                Value result = val_void();
+                result.kind = VAL_STRING;
+                result.as.s = result_text;
+                value_free(source);
+                value_free(start);
+                value_free(end);
+                return result;
+            }
             AstNode *func = find_function(interp, node->as.call_expr.callee);
             if (func == NULL) {
                 runtime_error(interp, node->line, "craft non trovata");
