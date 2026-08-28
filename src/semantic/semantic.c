@@ -356,14 +356,14 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 TypeInfo source = check_expr(analyzer, node->as.call_expr.arguments.items[0]);
                 TypeInfo start = check_expr(analyzer, node->as.call_expr.arguments.items[1]);
                 TypeInfo end = check_expr(analyzer, node->as.call_expr.arguments.items[2]);
-                if (source.is_array || source.type != KRATOS_TYPE_STRING) {
-                    semantic_error(analyzer, node->line, "slice richiede una stringa");
+                if ((source.is_array == 0 && source.type != KRATOS_TYPE_STRING) || source.is_array > 1) {
+                    semantic_error(analyzer, node->line, "slice richiede una stringa o un array semplice");
                 }
                 if (start.is_array || start.type != KRATOS_TYPE_INT ||
                     end.is_array || end.type != KRATOS_TYPE_INT) {
                     semantic_error(analyzer, node->line, "gli indici di slice devono essere k_int");
                 }
-                return type_info(KRATOS_TYPE_STRING, 0);
+                return source.is_array == 1 ? type_info(source.type, 1) : type_info(KRATOS_TYPE_STRING, 0);
             }
             Symbol *symbol = scope_find(analyzer->scope, node->as.call_expr.callee);
             if (symbol == NULL || !symbol->is_function || symbol->func == NULL) {

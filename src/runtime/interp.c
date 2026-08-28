@@ -607,27 +607,58 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 Value source = eval_expr(interp, node->as.call_expr.arguments.items[0]);
                 Value start = eval_expr(interp, node->as.call_expr.arguments.items[1]);
                 Value end = eval_expr(interp, node->as.call_expr.arguments.items[2]);
-                const char *text = source.kind == VAL_STRING && source.as.s != NULL ? source.as.s : "";
-                size_t length = strlen(text);
-                if (source.kind != VAL_STRING || start.kind != VAL_INT || end.kind != VAL_INT ||
-                    start.as.i < 0 || end.as.i < start.as.i || (size_t)end.as.i > length) {
+                if (start.kind != VAL_INT || end.kind != VAL_INT || start.as.i < 0 || end.as.i < start.as.i) {
                     runtime_error(interp, node->line, "intervallo di slice non valido");
                     value_free(source);
                     value_free(start);
                     value_free(end);
                     return val_void();
                 }
-                size_t slice_length = (size_t)(end.as.i - start.as.i);
-                char *result_text = malloc(slice_length + 1);
-                if (result_text == NULL) {
-                    fprintf(stderr, "kratos: memoria esaurita\n");
-                    exit(EXIT_FAILURE);
-                }
-                memcpy(result_text, text + start.as.i, slice_length);
-                result_text[slice_length] = '\0';
                 Value result = val_void();
-                result.kind = VAL_STRING;
-                result.as.s = result_text;
+                if (source.kind == VAL_STRING) {
+                    const char *text = source.as.s != NULL ? source.as.s : "";
+                    size_t length = strlen(text);
+                    size_t slice_length = (size_t)(end.as.i - start.as.i);
+                    if ((size_t)end.as.i > length) {
+                        runtime_error(interp, node->line, "intervallo di slice non valido");
+                        value_free(source);
+                        value_free(start);
+                        value_free(end);
+                        return val_void();
+                    }
+                    char *result_text = malloc(slice_length + 1);
+                    if (result_text == NULL) {
+                        fprintf(stderr, "kratos: memoria esaurita\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    memcpy(result_text, text + start.as.i, slice_length);
+                    result_text[slice_length] = '\0';
+                    result.kind = VAL_STRING;
+                    result.as.s = result_text;
+                } else if (source.kind == VAL_ARRAY && source.element_type != KRATOS_TYPE_VOID) {
+                    if ((size_t)end.as.i > source.as.array.count) {
+                        runtime_error(interp, node->line, "intervallo di slice non valido");
+                        value_free(source);
+                        value_free(start);
+                        value_free(end);
+                        return val_void();
+                    }
+                    result.kind = VAL_ARRAY;
+                    result.element_type = source.element_type;
+                    result.as.array.count = (size_t)(end.as.i - start.as.i);
+                    result.as.array.items = calloc(result.as.array.count, sizeof(Value));
+                    if (result.as.array.items == NULL && result.as.array.count > 0) {
+                        fprintf(stderr, "kratos: memoria esaurita\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    for (size_t i = 0; i < result.as.array.count; i++) {
+                        result.as.array.items[i] = value_clone(
+                            source.as.array.items[(size_t)start.as.i + i]
+                        );
+                    }
+                } else {
+                    runtime_error(interp, node->line, "slice richiede una stringa o un array semplice");
+                }
                 value_free(source);
                 value_free(start);
                 value_free(end);

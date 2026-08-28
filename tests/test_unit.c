@@ -264,6 +264,16 @@ int main(void)
     expect_true(interp_run(sliced) == 0, "interp string slice");
     ast_free(sliced);
 
+    AstNode *array_slice = parse_source(
+        "k_int[] values = [1, 2, 3, 4];\n"
+        "k_void craft main() { shout(slice(values, 1, 3)); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser array slice");
+    expect_true(semantic_analyze(array_slice, NULL) == 0, "semantic array slice");
+    expect_true(interp_run(array_slice) == 0, "interp array slice");
+    ast_free(array_slice);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;
