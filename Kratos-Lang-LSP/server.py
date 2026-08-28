@@ -13,6 +13,12 @@ DIAGNOSTIC_RE = re.compile(
     r"  --> (.*):(\d+):(\d+)\n"
 )
 
+COMPLETION_WORDS = (
+    "k_int", "k_float", "k_bool", "k_char", "k_string", "k_const", "k_void",
+    "if", "elif", "else", "hold", "press", "drive", "sweep", "in", "snap", "push",
+    "craft", "yield", "shout", "wield", "true", "false", "not",
+)
+
 
 def read_message() -> dict[str, Any] | None:
     content_length = None
@@ -86,6 +92,19 @@ def publish(uri: str, source: str) -> None:
     )
 
 
+def completion_items(source: str, line: int, character: int) -> list[dict[str, str]]:
+    lines = source.splitlines()
+    current_line = lines[line] if 0 <= line < len(lines) else ""
+    prefix = current_line[:character]
+    match = re.search(r"[A-Za-z_][A-Za-z0-9_]*$", prefix)
+    typed = match.group(0) if match else ""
+    return [
+        {"label": word, "kind": 14, "detail": "Kratos keyword"}
+        for word in COMPLETION_WORDS
+        if word.startswith(typed)
+    ]
+
+
 def main() -> None:
     documents: dict[str, str] = {}
     while True:
@@ -102,6 +121,7 @@ def main() -> None:
                 {
                     "capabilities": {
                         "textDocumentSync": {"openClose": True, "change": 1},
+                        "completionProvider": {"triggerCharacters": ["_"]},
                     },
                     "serverInfo": {"name": "kratos-lsp", "version": "0.1.0"},
                 },
@@ -122,6 +142,19 @@ def main() -> None:
             if changes and "text" in changes[-1]:
                 documents[uri] = changes[-1]["text"]
                 publish(uri, documents[uri])
+        elif method == "textDocument/completion":
+            document = params["textDocument"]
+            uri = document["uri"]
+            position = params["position"]
+            response(
+                request_id,
+                {
+                    "isIncomplete": False,
+                    "items": completion_items(
+                        documents.get(uri, ""), position["line"], position["character"]
+                    ),
+                },
+            )
         elif request_id is not None:
             send_message(
                 {
