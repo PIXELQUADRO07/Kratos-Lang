@@ -26,6 +26,21 @@ static char *token_to_cstring(Token token)
     return buffer;
 }
 
+static char *token_to_number_string(Token token)
+{
+    char *buffer = token_to_cstring(token);
+    char *read = buffer;
+    char *write = buffer;
+    while (*read != '\0') {
+        if (*read != '_') {
+            *write++ = *read;
+        }
+        read++;
+    }
+    *write = '\0';
+    return buffer;
+}
+
 static char *token_to_string_value(Token token)
 {
     return token_decode_string(token);
@@ -191,14 +206,14 @@ static AstNode *parse_primary(Parser *parser)
     size_t line = parser->current.line;
 
     if (match(parser, TOKEN_INTEGER)) {
-        char *text = token_to_cstring(parser->previous);
+        char *text = token_to_number_string(parser->previous);
         int64_t value = strtoll(text, NULL, 10);
         free(text);
         return ast_new_literal_int(line, value);
     }
 
     if (match(parser, TOKEN_FLOAT)) {
-        char *text = token_to_cstring(parser->previous);
+        char *text = token_to_number_string(parser->previous);
         double value = strtod(text, NULL);
         free(text);
         return ast_new_literal_float(line, value);

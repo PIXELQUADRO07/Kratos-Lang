@@ -101,6 +101,12 @@ int main(void)
     collect_tokens("a = b", types, 32, &count);
     expect_true(types[1] == TOKEN_ASSIGN, "lexer =");
 
+    collect_tokens(".5 10. 1e3 1_000", types, 32, &count);
+    expect_true(types[0] == TOKEN_FLOAT, "lexer leading decimal point");
+    expect_true(types[1] == TOKEN_FLOAT, "lexer trailing decimal point");
+    expect_true(types[2] == TOKEN_FLOAT, "lexer exponent");
+    expect_true(types[3] == TOKEN_INTEGER, "lexer digit separator");
+
     collect_tokens("craftwork", types, 32, &count);
     expect_true(types[0] == TOKEN_IDENTIFIER, "lexer craftwork is identifier");
 
@@ -187,6 +193,19 @@ int main(void)
     expect_true(semantic_analyze(strings, NULL) == 0, "semantic string concatenation");
     expect_true(interp_run(strings) == 0, "interp string concatenation");
     ast_free(strings);
+
+    AstNode *numbers = parse_source(
+        "k_float a = .5;\n"
+        "k_float b = 10.;\n"
+        "k_float c = 1e3;\n"
+        "k_int d = 1_000;\n"
+        "k_void craft main() { shout(a); shout(b); shout(c); shout(d); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser extended numeric literals");
+    expect_true(semantic_analyze(numbers, NULL) == 0, "semantic extended numeric literals");
+    expect_true(interp_run(numbers) == 0, "interp extended numeric literals");
+    ast_free(numbers);
 
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);

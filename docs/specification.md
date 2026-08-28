@@ -41,7 +41,8 @@ the AST.
 ## Implemented Token Families
 
 - identifiers and the keyword set listed in [language.md](language.md);
-- `INTEGER`, `FLOAT`, `TRUE`, `FALSE`;
+- `INTEGER`, `FLOAT`, `TRUE`, `FALSE`; numeric literals support leading or
+  trailing decimal points, exponents, and `_` digit separators;
 - `CHAR_LITERAL` and `STRING_LITERAL`;
 - operators and delimiters listed in [operators.md](operators.md) and
   [syntax.md](syntax.md);

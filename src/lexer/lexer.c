@@ -209,26 +209,45 @@ static Token lexer_number(Lexer *lexer)
 {
     size_t start = lexer->position;
 
-    while (isdigit((unsigned char)current_char(lexer))) {
+    while (isdigit((unsigned char)current_char(lexer)) ||
+           (current_char(lexer) == '_' &&
+            isdigit((unsigned char)lexer->source[lexer->position + 1]))) {
         advance(lexer);
     }
 
     TokenType type = TOKEN_INTEGER;
 
     /*
-     * Se dopo le cifre troviamo un punto
-     * seguito da almeno una cifra,
-     * abbiamo un numero decimale.
+     * Un punto appartiene al numero anche quando non e' seguito da cifre
+     * (10.); il caso .5 viene instradato qui dal lexer principale.
      */
-    if (current_char(lexer) == '.' &&
-        isdigit((unsigned char)lexer->source[lexer->position + 1])) {
-
+    if (current_char(lexer) == '.') {
         type = TOKEN_FLOAT;
-
         advance(lexer);
 
-        while (isdigit((unsigned char)current_char(lexer))) {
+        while (isdigit((unsigned char)current_char(lexer)) ||
+               (current_char(lexer) == '_' &&
+                isdigit((unsigned char)lexer->source[lexer->position + 1]))) {
             advance(lexer);
+        }
+    }
+
+    if (current_char(lexer) == 'e' || current_char(lexer) == 'E') {
+        size_t exponent = lexer->position + 1;
+        if (lexer->source[exponent] == '+' || lexer->source[exponent] == '-') {
+            exponent++;
+        }
+        if (isdigit((unsigned char)lexer->source[exponent])) {
+            type = TOKEN_FLOAT;
+            advance(lexer);
+            if (current_char(lexer) == '+' || current_char(lexer) == '-') {
+                advance(lexer);
+            }
+            while (isdigit((unsigned char)current_char(lexer)) ||
+                   (current_char(lexer) == '_' &&
+                    isdigit((unsigned char)lexer->source[lexer->position + 1]))) {
+                advance(lexer);
+            }
         }
     }
 
@@ -373,6 +392,10 @@ Token lexer_next_token(Lexer *lexer)
 
 
     if (isdigit((unsigned char)c)) {
+        return lexer_number(lexer);
+    }
+
+    if (c == '.' && isdigit((unsigned char)lexer->source[lexer->position + 1])) {
         return lexer_number(lexer);
     }
 
