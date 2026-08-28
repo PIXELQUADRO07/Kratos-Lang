@@ -224,6 +224,39 @@ static void register_function(Interp *interp, AstNode *func)
 static Value eval_expr(Interp *interp, AstNode *node);
 static Flow eval_stmt(Interp *interp, AstNode *node);
 
+static Value *resolve_assignment_target(Interp *interp, AstNode *target)
+{
+    if (target->kind == AST_IDENTIFIER_EXPR) {
+        Binding *binding = env_find(interp->env, target->as.identifier_expr.name);
+        if (binding == NULL) {
+            runtime_error(interp, target->line, "variabile non trovata");
+            return NULL;
+        }
+        return &binding->value;
+    }
+
+    if (target->kind == AST_INDEX_EXPR) {
+        Value *array = resolve_assignment_target(interp, target->as.index_expr.array);
+        Value index = eval_expr(interp, target->as.index_expr.index);
+        if (array == NULL || array->kind != VAL_ARRAY || index.kind != VAL_INT) {
+            runtime_error(interp, target->line, "assegnamento indicizzato non valido");
+            value_free(index);
+            return NULL;
+        }
+        if (index.as.i < 0 || (size_t)index.as.i >= array->as.array.count) {
+            runtime_error(interp, target->line, "indice fuori dai limiti");
+            value_free(index);
+            return NULL;
+        }
+        Value *slot = &array->as.array.items[index.as.i];
+        value_free(index);
+        return slot;
+    }
+
+    runtime_error(interp, target->line, "destinazione di assegnamento non valida");
+    return NULL;
+}
+
 
 static int is_truthy(Value value)
 {
@@ -823,42 +856,13 @@ static Flow eval_stmt(Interp *interp, AstNode *node)
         case AST_ASSIGN: {
             Value value = eval_expr(interp, node->as.assign.value);
             AstNode *target = node->as.assign.target;
-            if (target->kind == AST_IDENTIFIER_EXPR) {
-                Binding *binding = env_find(interp->env, target->as.identifier_expr.name);
-                if (binding == NULL) {
-                    runtime_error(interp, node->line, "assegnamento a variabile inesistente");
-                    value_free(value);
-                    return FLOW_ERROR;
-                }
-                value_free(binding->value);
-                binding->value = value;
-            } else if (target->kind == AST_INDEX_EXPR &&
-                       target->as.index_expr.array->kind == AST_IDENTIFIER_EXPR) {
-                Binding *binding = env_find(
-                    interp->env,
-                    target->as.index_expr.array->as.identifier_expr.name
-                );
-                Value index = eval_expr(interp, target->as.index_expr.index);
-                if (binding == NULL || binding->value.kind != VAL_ARRAY || index.kind != VAL_INT) {
-                    runtime_error(interp, node->line, "assegnamento indicizzato non valido");
-                    value_free(index);
-                    value_free(value);
-                    return FLOW_ERROR;
-                }
-                if (index.as.i < 0 || (size_t)index.as.i >= binding->value.as.array.count) {
-                    runtime_error(interp, node->line, "indice fuori dai limiti");
-                    value_free(index);
-                    value_free(value);
-                    return FLOW_ERROR;
-                }
-                value_free(binding->value.as.array.items[index.as.i]);
-                binding->value.as.array.items[index.as.i] = value;
-                value_free(index);
-            } else {
-                runtime_error(interp, node->line, "destinazione di assegnamento non valida");
+            Value *slot = resolve_assignment_target(interp, target);
+            if (slot == NULL) {
                 value_free(value);
                 return FLOW_ERROR;
             }
+            value_free(*slot);
+            *slot = value;
             return FLOW_OK;
         }
 

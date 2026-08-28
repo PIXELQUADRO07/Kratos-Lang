@@ -164,7 +164,7 @@ struct AstNode {
         /* AST_VAR_DECL */
         struct {
             int is_const;
-            int is_array; /* 1 per "k_type[] nome = ...;" */
+            int is_array; /* profondita': 1 per "k_type[]", 2 per "k_type[][]" */
             KratosType type;
             char *name;
             AstNode *initializer; /* sempre presente: la grammatica richiede "= expression" */

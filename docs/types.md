@@ -12,8 +12,9 @@ and their literal forms are listed below.
 | `k_string` | `"Kratos"`, `"line\n"` | Implemented |
 | `k_void` | none — return type only | Implemented |
 
-Arrays use `type[]` on a declaration: `k_int[] Lista = [1, 2, 3];`. Nested
-arrays are not supported.
+Arrays use one pair of brackets per dimension: `k_int[] Lista = [1, 2, 3];`
+and `k_int[][] Matrix = [[1, 2], [3, 4]];`. `sweep` currently accepts only
+one-dimensional arrays.
 
 ## Integer and Float Literals
 

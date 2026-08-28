@@ -244,6 +244,16 @@ int main(void)
     expect_true(interp_run(numbers) == 0, "interp extended numeric literals");
     ast_free(numbers);
 
+    AstNode *nested = parse_source(
+        "k_int[][] matrix = [[1, 2], [3, 4]];\n"
+        "k_void craft main() { matrix[1][0] = 8; shout(matrix[1][0]); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser nested arrays");
+    expect_true(semantic_analyze(nested, NULL) == 0, "semantic nested arrays");
+    expect_true(interp_run(nested) == 0, "interp nested arrays");
+    ast_free(nested);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

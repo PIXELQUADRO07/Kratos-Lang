@@ -130,7 +130,7 @@ stops (it does not interpret or emit C).
 - Conditions are `k_bool`.
 - `snap` / `push` require an enclosing loop.
 - Non-void crafts must `yield` on every path (`if` needs an `else` for this).
-- Array literals must have a uniform element type matching the declaration.
+- Array literals must have a uniform element type and depth matching the declaration.
 - `wield` loads another file; cycles are errors.
 
 ## Runtime

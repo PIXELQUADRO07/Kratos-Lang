@@ -462,9 +462,9 @@ static AstNode *parse_var_decl(Parser *parser)
     KratosType type = parse_type(parser);
 
     int is_array = 0;
-    if (match(parser, TOKEN_LBRACKET)) {
+    while (match(parser, TOKEN_LBRACKET)) {
         expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
-        is_array = 1;
+        is_array++;
     }
 
     Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a variable name");
@@ -755,9 +755,9 @@ static AstNode *parse_top_level(Parser *parser)
     }
 
     int is_array = 0;
-    if (match(parser, TOKEN_LBRACKET)) {
+    while (match(parser, TOKEN_LBRACKET)) {
         expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
-        is_array = 1;
+        is_array++;
     }
 
     Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a variable name or 'craft' function");

@@ -378,9 +378,6 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
             int have_element = 0;
             for (size_t i = 0; i < node->as.array_literal.elements.count; i++) {
                 TypeInfo item = check_expr(analyzer, node->as.array_literal.elements.items[i]);
-                if (item.is_array) {
-                    semantic_error(analyzer, node->line, "array nidificati non supportati");
-                }
                 if (!have_element) {
                     element = item;
                     have_element = 1;
@@ -391,19 +388,19 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
             if (!have_element) {
                 return type_info(KRATOS_TYPE_VOID, 1);
             }
-            return type_info(element.type, 1);
+            return type_info(element.type, element.is_array + 1);
         }
 
         case AST_INDEX_EXPR: {
             TypeInfo array = check_expr(analyzer, node->as.index_expr.array);
             TypeInfo index = check_expr(analyzer, node->as.index_expr.index);
-            if (!array.is_array) {
+            if (array.is_array == 0) {
                 semantic_error(analyzer, node->line, "indicizzazione di un valore che non e' un array");
             }
             if (index.is_array || index.type != KRATOS_TYPE_INT) {
                 semantic_error(analyzer, node->line, "l'indice deve essere k_int");
             }
-            return type_info(array.type, 0);
+            return type_info(array.type, array.is_array > 0 ? array.is_array - 1 : 0);
         }
 
         default:
@@ -528,7 +525,7 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
 
         case AST_SWEEP_STMT: {
             Symbol *collection = scope_find(analyzer->scope, node->as.sweep_stmt.collection_name);
-            if (collection == NULL || collection->is_function || !collection->type.is_array) {
+            if (collection == NULL || collection->is_function || collection->type.is_array != 1) {
                 semantic_error(analyzer, node->line, "sweep richiede un array");
             } else if (collection->type.type != node->as.sweep_stmt.element_type) {
                 semantic_error(analyzer, node->line, "il tipo dell'elemento non coincide con l'array");
