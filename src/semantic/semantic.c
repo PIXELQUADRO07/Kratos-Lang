@@ -11,6 +11,7 @@
 typedef struct {
     KratosType type;
     int is_array;
+    const char *record_name;
 } TypeInfo;
 
 typedef struct Symbol {
@@ -28,25 +29,46 @@ typedef struct Scope {
     struct Scope *parent;
 } Scope;
 
+typedef struct RecordFieldInfo {
+    char *name;
+    TypeInfo type;
+} RecordFieldInfo;
+
+typedef struct RecordTypeInfo {
+    char *name;
+    RecordFieldInfo *fields;
+    size_t field_count;
+    size_t field_capacity;
+} RecordTypeInfo;
+
 typedef struct {
     int had_error;
     Scope *scope;
     int loop_depth;
     int in_function;
-    KratosType current_return;
+    TypeInfo current_return;
     char **wield_stack;
     size_t wield_stack_count;
     size_t wield_stack_capacity;
     const DiagContext *diag_context;
+    RecordTypeInfo *records;
+    size_t record_count;
+    size_t record_capacity;
 } Analyzer;
 
 
-static TypeInfo type_info(KratosType type, int is_array)
+static TypeInfo type_info(KratosType type, int is_array, const char *record_name)
 {
     TypeInfo info;
     info.type = type;
     info.is_array = is_array;
+    info.record_name = record_name;
     return info;
+}
+
+static TypeInfo type_info_simple(KratosType type, int is_array)
+{
+    return type_info(type, is_array, NULL);
 }
 
 
@@ -79,6 +101,8 @@ static void semantic_error(Analyzer *analyzer, size_t line, const char *message)
         code = DIAG_K313;
     } else if (strstr(message, "craft inesistente") != NULL || strstr(message, "argomenti") != NULL || strstr(message, "chiamata") != NULL) {
         code = DIAG_K314;
+    } else if (strstr(message, "record") != NULL || strstr(message, "campo") != NULL) {
+        code = DIAG_K315;
     }
     const char *display_message = message;
     switch (code) {
@@ -96,6 +120,7 @@ static void semantic_error(Analyzer *analyzer, size_t line, const char *message)
         case DIAG_K312: display_message = "invalid construct at this level"; break;
         case DIAG_K313: display_message = "nested arrays are not supported"; break;
         case DIAG_K314: display_message = "invalid function call"; break;
+        case DIAG_K315: display_message = "record type or field error"; break;
         default: break;
     }
     diag_emitf(analyzer->diag_context, DIAG_ERROR, code, line, 1, 1, NULL, "%s", display_message);
@@ -173,10 +198,132 @@ static void scope_add(Analyzer *analyzer, size_t line, const char *name, TypeInf
     symbol->func = func;
 }
 
+static RecordTypeInfo *record_type_find(Analyzer *analyzer, const char *name)
+{
+    if (name == NULL) {
+        return NULL;
+    }
+    for (size_t i = 0; i < analyzer->record_count; i++) {
+        if (strcmp(analyzer->records[i].name, name) == 0) {
+            return &analyzer->records[i];
+        }
+    }
+    return NULL;
+}
+
+static void record_type_add(Analyzer *analyzer, AstNode *record_node)
+{
+    const char *name = record_node->as.record_decl.name;
+    if (record_type_find(analyzer, name) != NULL) {
+        semantic_error(analyzer, record_node->line, "record gia' dichiarato");
+        return;
+    }
+
+    if (analyzer->record_count == analyzer->record_capacity) {
+        size_t new_capacity = analyzer->record_capacity == 0 ? 4 : analyzer->record_capacity * 2;
+        RecordTypeInfo *new_records = realloc(analyzer->records, new_capacity * sizeof(RecordTypeInfo));
+        if (new_records == NULL) {
+            fprintf(stderr, "kratos: memoria esaurita\n");
+            exit(EXIT_FAILURE);
+        }
+        analyzer->records = new_records;
+        analyzer->record_capacity = new_capacity;
+    }
+
+    RecordTypeInfo *rec = &analyzer->records[analyzer->record_count++];
+    rec->name = kratos_copy_string(name);
+    rec->fields = NULL;
+    rec->field_count = 0;
+    rec->field_capacity = 0;
+
+    for (size_t i = 0; i < record_node->as.record_decl.fields.count; i++) {
+        AstNode *field = record_node->as.record_decl.fields.items[i];
+        const char *f_name = field->as.record_field.name;
+
+        for (size_t j = 0; j < rec->field_count; j++) {
+            if (strcmp(rec->fields[j].name, f_name) == 0) {
+                semantic_error(analyzer, field->line, "campo duplicato nel record");
+                break;
+            }
+        }
+
+        if (field->as.record_field.type == KRATOS_TYPE_VOID && !field->as.record_field.is_array) {
+            semantic_error(analyzer, field->line, "k_void non puo' essere un tipo di campo");
+        } else if (field->as.record_field.type == KRATOS_TYPE_RECORD) {
+            if (strcmp(field->as.record_field.record_name, name) == 0 && field->as.record_field.is_array == 0) {
+                semantic_error(analyzer, field->line, "un record non puo' contenere se stesso direttamente");
+            } else if (record_type_find(analyzer, field->as.record_field.record_name) == NULL) {
+                semantic_error(analyzer, field->line, "tipo record del campo non dichiarato");
+            }
+        }
+
+        if (rec->field_count == rec->field_capacity) {
+            size_t new_cap = rec->field_capacity == 0 ? 4 : rec->field_capacity * 2;
+            RecordFieldInfo *new_fields = realloc(rec->fields, new_cap * sizeof(RecordFieldInfo));
+            if (new_fields == NULL) {
+                fprintf(stderr, "kratos: memoria esaurita\n");
+                exit(EXIT_FAILURE);
+            }
+            rec->fields = new_fields;
+            rec->field_capacity = new_cap;
+        }
+
+        RecordFieldInfo *f_info = &rec->fields[rec->field_count++];
+        f_info->name = kratos_copy_string(f_name);
+        f_info->type = type_info(
+            field->as.record_field.type,
+            field->as.record_field.is_array,
+            field->as.record_field.record_name
+        );
+    }
+}
+
+static void record_types_free(Analyzer *analyzer)
+{
+    for (size_t i = 0; i < analyzer->record_count; i++) {
+        free(analyzer->records[i].name);
+        for (size_t j = 0; j < analyzer->records[i].field_count; j++) {
+            free(analyzer->records[i].fields[j].name);
+        }
+        free(analyzer->records[i].fields);
+    }
+    free(analyzer->records);
+    analyzer->records = NULL;
+    analyzer->record_count = 0;
+    analyzer->record_capacity = 0;
+}
+
+static int is_node_const(Analyzer *analyzer, const AstNode *node)
+{
+    if (node == NULL) {
+        return 0;
+    }
+    if (node->kind == AST_IDENTIFIER_EXPR) {
+        Symbol *symbol = scope_find(analyzer->scope, node->as.identifier_expr.name);
+        return symbol != NULL && symbol->is_const;
+    }
+    if (node->kind == AST_INDEX_EXPR) {
+        return is_node_const(analyzer, node->as.index_expr.array);
+    }
+    if (node->kind == AST_MEMBER_EXPR) {
+        return is_node_const(analyzer, node->as.member_expr.target);
+    }
+    return 0;
+}
+
 
 static int types_equal(TypeInfo a, TypeInfo b)
 {
-    return a.type == b.type && a.is_array == b.is_array;
+    if (a.type != b.type || a.is_array != b.is_array) {
+        return 0;
+    }
+    if (a.type == KRATOS_TYPE_RECORD) {
+        if (a.record_name == NULL || b.record_name == NULL) {
+            return 0;
+        }
+        return strcmp(a.record_name, b.record_name) == 0;
+    }
+    return 1;
 }
 
 
@@ -235,7 +382,7 @@ static void check_stmt(Analyzer *analyzer, AstNode *node);
 
 static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
 {
-    TypeInfo invalid = type_info(KRATOS_TYPE_VOID, 0);
+    TypeInfo invalid = type_info_simple(KRATOS_TYPE_VOID, 0);
     if (node == NULL) {
         return invalid;
     }
@@ -243,11 +390,11 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
     switch (node->kind) {
         case AST_LITERAL_EXPR:
             switch (node->as.literal_expr.kind) {
-                case LITERAL_INT:    return type_info(KRATOS_TYPE_INT, 0);
-                case LITERAL_FLOAT:  return type_info(KRATOS_TYPE_FLOAT, 0);
-                case LITERAL_BOOL:   return type_info(KRATOS_TYPE_BOOL, 0);
-                case LITERAL_CHAR:   return type_info(KRATOS_TYPE_CHAR, 0);
-                case LITERAL_STRING: return type_info(KRATOS_TYPE_STRING, 0);
+                case LITERAL_INT:    return type_info_simple(KRATOS_TYPE_INT, 0);
+                case LITERAL_FLOAT:  return type_info_simple(KRATOS_TYPE_FLOAT, 0);
+                case LITERAL_BOOL:   return type_info_simple(KRATOS_TYPE_BOOL, 0);
+                case LITERAL_CHAR:   return type_info_simple(KRATOS_TYPE_CHAR, 0);
+                case LITERAL_STRING: return type_info_simple(KRATOS_TYPE_STRING, 0);
             }
             break;
 
@@ -270,7 +417,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 if (operand.is_array || operand.type != KRATOS_TYPE_BOOL) {
                     semantic_error(analyzer, node->line, "'not' richiede un k_bool");
                 }
-                return type_info(KRATOS_TYPE_BOOL, 0);
+                return type_info_simple(KRATOS_TYPE_BOOL, 0);
             }
             if (operand.is_array || (operand.type != KRATOS_TYPE_INT && operand.type != KRATOS_TYPE_FLOAT)) {
                 semantic_error(analyzer, node->line, "negazione aritmetica richiede k_int o k_float");
@@ -290,21 +437,21 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 if (right.type != KRATOS_TYPE_BOOL || right.is_array) {
                     semantic_error(analyzer, node->line, "&& e || richiedono k_bool");
                 }
-                return type_info(KRATOS_TYPE_BOOL, 0);
+                return type_info_simple(KRATOS_TYPE_BOOL, 0);
             }
 
             TypeInfo right = check_expr(analyzer, node->as.binary_expr.right);
 
             if (op == TOKEN_PLUS && !left.is_array && !right.is_array &&
                 left.type == KRATOS_TYPE_STRING && right.type == KRATOS_TYPE_STRING) {
-                return type_info(KRATOS_TYPE_STRING, 0);
+                return type_info_simple(KRATOS_TYPE_STRING, 0);
             }
 
             if (op == TOKEN_EQUAL || op == TOKEN_NOT_EQUAL) {
                 if (left.is_array || right.is_array || !types_equal(left, right)) {
                     semantic_error(analyzer, node->line, "confronto tra tipi incompatibili");
                 }
-                return type_info(KRATOS_TYPE_BOOL, 0);
+                return type_info_simple(KRATOS_TYPE_BOOL, 0);
             }
 
             if (op == TOKEN_LESS || op == TOKEN_GREATER || op == TOKEN_LESS_EQUAL || op == TOKEN_GREATER_EQUAL) {
@@ -313,27 +460,27 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                     (right.type != KRATOS_TYPE_INT && right.type != KRATOS_TYPE_FLOAT)) {
                     semantic_error(analyzer, node->line, "confronto relazionale richiede k_int o k_float");
                 }
-                return type_info(KRATOS_TYPE_BOOL, 0);
+                return type_info_simple(KRATOS_TYPE_BOOL, 0);
             }
 
             if (op == TOKEN_PERCENT) {
                 if (left.is_array || right.is_array || left.type != KRATOS_TYPE_INT || right.type != KRATOS_TYPE_INT) {
                     semantic_error(analyzer, node->line, "% richiede due k_int");
                 }
-                return type_info(KRATOS_TYPE_INT, 0);
+                return type_info_simple(KRATOS_TYPE_INT, 0);
             }
 
             if (left.is_array || right.is_array ||
                 (left.type != KRATOS_TYPE_INT && left.type != KRATOS_TYPE_FLOAT) ||
                 (right.type != KRATOS_TYPE_INT && right.type != KRATOS_TYPE_FLOAT)) {
                 semantic_error(analyzer, node->line, "operatore aritmetico richiede k_int o k_float");
-                return type_info(KRATOS_TYPE_INT, 0);
+                return type_info_simple(KRATOS_TYPE_INT, 0);
             }
 
             if (left.type == KRATOS_TYPE_FLOAT || right.type == KRATOS_TYPE_FLOAT) {
-                return type_info(KRATOS_TYPE_FLOAT, 0);
+                return type_info_simple(KRATOS_TYPE_FLOAT, 0);
             }
-            return type_info(KRATOS_TYPE_INT, 0);
+            return type_info_simple(KRATOS_TYPE_INT, 0);
         }
 
         case AST_CALL_EXPR: {
@@ -346,7 +493,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 if (!argument.is_array && argument.type != KRATOS_TYPE_STRING) {
                     semantic_error(analyzer, node->line, "len richiede una stringa o un array");
                 }
-                return type_info(KRATOS_TYPE_INT, 0);
+                return type_info_simple(KRATOS_TYPE_INT, 0);
             }
             if (strcmp(node->as.call_expr.callee, "slice") == 0) {
                 if (node->as.call_expr.arguments.count != 3) {
@@ -363,7 +510,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                     end.is_array || end.type != KRATOS_TYPE_INT) {
                     semantic_error(analyzer, node->line, "gli indici di slice devono essere k_int");
                 }
-                return source.is_array == 1 ? type_info(source.type, 1) : type_info(KRATOS_TYPE_STRING, 0);
+                return source.is_array == 1 ? type_info(source.type, 1, source.record_name) : type_info_simple(KRATOS_TYPE_STRING, 0);
             }
             if (strcmp(node->as.call_expr.callee, "to_string") == 0 ||
                 strcmp(node->as.call_expr.callee, "to_int") == 0 ||
@@ -377,7 +524,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                     semantic_error(analyzer, node->line, "la conversione richiede un valore scalare");
                 }
                 if (strcmp(node->as.call_expr.callee, "to_string") == 0) {
-                    return type_info(KRATOS_TYPE_STRING, 0);
+                    return type_info_simple(KRATOS_TYPE_STRING, 0);
                 }
                 if (argument.type != KRATOS_TYPE_INT && argument.type != KRATOS_TYPE_FLOAT &&
                     argument.type != KRATOS_TYPE_BOOL && argument.type != KRATOS_TYPE_CHAR &&
@@ -385,7 +532,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                     semantic_error(analyzer, node->line, "tipo non convertibile");
                 }
                 return strcmp(node->as.call_expr.callee, "to_int") == 0
-                    ? type_info(KRATOS_TYPE_INT, 0) : type_info(KRATOS_TYPE_FLOAT, 0);
+                    ? type_info_simple(KRATOS_TYPE_INT, 0) : type_info_simple(KRATOS_TYPE_FLOAT, 0);
             }
             Symbol *symbol = scope_find(analyzer->scope, node->as.call_expr.callee);
             if (symbol == NULL || !symbol->is_function || symbol->func == NULL) {
@@ -403,17 +550,18 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
             size_t n = expected < given ? expected : given;
             for (size_t i = 0; i < n; i++) {
                 TypeInfo arg = check_expr(analyzer, node->as.call_expr.arguments.items[i]);
-                TypeInfo param = type_info(func->as.func_decl.params.items[i]->as.param.type, 0);
+                AstNode *p_node = func->as.func_decl.params.items[i];
+                TypeInfo param = type_info(p_node->as.param.type, p_node->as.param.is_array, p_node->as.param.record_name);
                 if (!assignable(arg, param)) {
                     semantic_error(analyzer, node->line, "tipo di argomento incompatibile");
                 }
             }
 
-            return type_info(func->as.func_decl.return_type, 0);
+            return type_info(func->as.func_decl.return_type, 0, func->as.func_decl.return_record_name);
         }
 
         case AST_ARRAY_LITERAL: {
-            TypeInfo element = type_info(KRATOS_TYPE_VOID, 0);
+            TypeInfo element = type_info_simple(KRATOS_TYPE_VOID, 0);
             int have_element = 0;
             for (size_t i = 0; i < node->as.array_literal.elements.count; i++) {
                 TypeInfo item = check_expr(analyzer, node->as.array_literal.elements.items[i]);
@@ -425,9 +573,9 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 }
             }
             if (!have_element) {
-                return type_info(KRATOS_TYPE_VOID, 1);
+                return type_info_simple(KRATOS_TYPE_VOID, 1);
             }
-            return type_info(element.type, element.is_array + 1);
+            return type_info(element.type, element.is_array + 1, element.record_name);
         }
 
         case AST_INDEX_EXPR: {
@@ -439,7 +587,66 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
             if (index.is_array || index.type != KRATOS_TYPE_INT) {
                 semantic_error(analyzer, node->line, "l'indice deve essere k_int");
             }
-            return type_info(array.type, array.is_array > 0 ? array.is_array - 1 : 0);
+            return type_info(array.type, array.is_array > 0 ? array.is_array - 1 : 0, array.record_name);
+        }
+
+        case AST_RECORD_LITERAL: {
+            RecordTypeInfo *rec = record_type_find(analyzer, node->as.record_literal.name);
+            if (rec == NULL) {
+                semantic_error(analyzer, node->line, "tipo record inesistente");
+                return invalid;
+            }
+            size_t init_count = node->as.record_literal.fields.count;
+            int *initialized = calloc(rec->field_count > 0 ? rec->field_count : 1, sizeof(int));
+            for (size_t i = 0; i < init_count; i++) {
+                AstNode *field_init = node->as.record_literal.fields.items[i];
+                const char *f_name = field_init->as.field_init.name;
+                int found = -1;
+                for (size_t f = 0; f < rec->field_count; f++) {
+                    if (strcmp(rec->fields[f].name, f_name) == 0) {
+                        found = (int)f;
+                        break;
+                    }
+                }
+                if (found < 0) {
+                    semantic_error(analyzer, field_init->line, "campo sconosciuto nel record");
+                } else if (initialized[found]) {
+                    semantic_error(analyzer, field_init->line, "campo duplicato nel record");
+                } else {
+                    initialized[found] = 1;
+                    TypeInfo val_type = check_expr(analyzer, field_init->as.field_init.value);
+                    if (!assignable(val_type, rec->fields[found].type)) {
+                        semantic_error(analyzer, field_init->line, "tipo di campo incompatibile nel record");
+                    }
+                }
+            }
+            for (size_t f = 0; f < rec->field_count; f++) {
+                if (!initialized[f]) {
+                    semantic_error(analyzer, node->line, "campo mancante nel record");
+                }
+            }
+            free(initialized);
+            return type_info(KRATOS_TYPE_RECORD, 0, rec->name);
+        }
+
+        case AST_MEMBER_EXPR: {
+            TypeInfo target = check_expr(analyzer, node->as.member_expr.target);
+            if (target.is_array > 0 || target.type != KRATOS_TYPE_RECORD || target.record_name == NULL) {
+                semantic_error(analyzer, node->line, "accesso a un membro di un tipo non record");
+                return invalid;
+            }
+            RecordTypeInfo *rec = record_type_find(analyzer, target.record_name);
+            if (rec == NULL) {
+                semantic_error(analyzer, node->line, "tipo record inesistente");
+                return invalid;
+            }
+            for (size_t f = 0; f < rec->field_count; f++) {
+                if (strcmp(rec->fields[f].name, node->as.member_expr.member) == 0) {
+                    return rec->fields[f].type;
+                }
+            }
+            semantic_error(analyzer, node->line, "campo non trovato nel record");
+            return invalid;
         }
 
         default:
@@ -455,9 +662,13 @@ static void check_var_decl(Analyzer *analyzer, AstNode *node)
 {
     if (node->as.var_decl.type == KRATOS_TYPE_VOID && !node->as.var_decl.is_array) {
         semantic_error(analyzer, node->line, "k_void non puo' dichiarare una variabile");
+    } else if (node->as.var_decl.type == KRATOS_TYPE_RECORD) {
+        if (record_type_find(analyzer, node->as.var_decl.record_name) == NULL) {
+            semantic_error(analyzer, node->line, "tipo record non dichiarato");
+        }
     }
 
-    TypeInfo declared = type_info(node->as.var_decl.type, node->as.var_decl.is_array);
+    TypeInfo declared = type_info(node->as.var_decl.type, node->as.var_decl.is_array, node->as.var_decl.record_name);
     TypeInfo init = check_expr(analyzer, node->as.var_decl.initializer);
 
     if (init.is_array && init.type == KRATOS_TYPE_VOID && declared.is_array) {
@@ -487,6 +698,10 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
     }
 
     switch (node->kind) {
+        case AST_RECORD_DECL:
+            record_type_add(analyzer, node);
+            break;
+
         case AST_VAR_DECL:
             check_var_decl(analyzer, node);
             break;
@@ -577,7 +792,7 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
                 analyzer,
                 node->line,
                 node->as.sweep_stmt.element_name,
-                type_info(node->as.sweep_stmt.element_type, 0),
+                type_info(node->as.sweep_stmt.element_type, 0, node->as.sweep_stmt.element_record_name),
                 0,
                 0,
                 NULL
@@ -603,15 +818,14 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
                 break;
             }
             if (node->as.yield_stmt.value == NULL) {
-                if (analyzer->current_return != KRATOS_TYPE_VOID) {
+                if (analyzer->current_return.type != KRATOS_TYPE_VOID || analyzer->current_return.is_array != 0) {
                     semantic_error(analyzer, node->line, "yield senza valore in una craft che restituisce un tipo");
                 }
             } else {
                 TypeInfo value = check_expr(analyzer, node->as.yield_stmt.value);
-                TypeInfo expected = type_info(analyzer->current_return, 0);
-                if (analyzer->current_return == KRATOS_TYPE_VOID) {
+                if (analyzer->current_return.type == KRATOS_TYPE_VOID && analyzer->current_return.is_array == 0) {
                     semantic_error(analyzer, node->line, "una craft k_void non puo' fare yield di un valore");
-                } else if (!assignable(value, expected)) {
+                } else if (!assignable(value, analyzer->current_return)) {
                     semantic_error(analyzer, node->line, "tipo di yield incompatibile");
                 }
             }
@@ -626,7 +840,7 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
             break;
 
         case AST_ASSIGN: {
-            TypeInfo target;
+            TypeInfo target = type_info_simple(KRATOS_TYPE_VOID, 0);
             if (node->as.assign.target->kind == AST_IDENTIFIER_EXPR) {
                 Symbol *symbol = scope_find(analyzer->scope, node->as.assign.target->as.identifier_expr.name);
                 if (symbol == NULL || symbol->is_function) {
@@ -647,13 +861,37 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
                 if (index.is_array || index.type != KRATOS_TYPE_INT) {
                     semantic_error(analyzer, node->line, "l'indice deve essere k_int");
                 }
-                if (array_expr->kind == AST_IDENTIFIER_EXPR) {
-                    Symbol *symbol = scope_find(analyzer->scope, array_expr->as.identifier_expr.name);
-                    if (symbol != NULL && symbol->is_const) {
-                        semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                if (is_node_const(analyzer, array_expr)) {
+                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                }
+                target = type_info(array.type, array.is_array > 0 ? array.is_array - 1 : 0, array.record_name);
+            } else if (node->as.assign.target->kind == AST_MEMBER_EXPR) {
+                AstNode *target_expr = node->as.assign.target->as.member_expr.target;
+                TypeInfo rec_target = check_expr(analyzer, target_expr);
+                if (rec_target.is_array > 0 || rec_target.type != KRATOS_TYPE_RECORD || rec_target.record_name == NULL) {
+                    semantic_error(analyzer, node->line, "accesso a campo su un tipo non record");
+                    break;
+                }
+                if (is_node_const(analyzer, target_expr)) {
+                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                }
+                RecordTypeInfo *rec = record_type_find(analyzer, rec_target.record_name);
+                if (rec == NULL) {
+                    semantic_error(analyzer, node->line, "tipo record inesistente");
+                    break;
+                }
+                int found = 0;
+                for (size_t f = 0; f < rec->field_count; f++) {
+                    if (strcmp(rec->fields[f].name, node->as.assign.target->as.member_expr.member) == 0) {
+                        target = rec->fields[f].type;
+                        found = 1;
+                        break;
                     }
                 }
-                target = type_info(array.type, 0);
+                if (!found) {
+                    semantic_error(analyzer, node->line, "campo inesistente nel record");
+                    break;
+                }
             } else {
                 semantic_error(analyzer, node->line, "destinazione di assegnamento non valida");
                 break;
@@ -682,18 +920,22 @@ static void check_function(Analyzer *analyzer, AstNode *func)
     scope_init(&inner, analyzer->scope);
     analyzer->scope = &inner;
     analyzer->in_function = 1;
-    analyzer->current_return = func->as.func_decl.return_type;
+    analyzer->current_return = type_info(func->as.func_decl.return_type, 0, func->as.func_decl.return_record_name);
 
     for (size_t i = 0; i < func->as.func_decl.params.count; i++) {
         AstNode *param = func->as.func_decl.params.items[i];
-        if (param->as.param.type == KRATOS_TYPE_VOID) {
+        if (param->as.param.type == KRATOS_TYPE_VOID && !param->as.param.is_array) {
             semantic_error(analyzer, param->line, "un parametro non puo' essere k_void");
+        } else if (param->as.param.type == KRATOS_TYPE_RECORD) {
+            if (record_type_find(analyzer, param->as.param.record_name) == NULL) {
+                semantic_error(analyzer, param->line, "tipo record del parametro non dichiarato");
+            }
         }
         scope_add(
             analyzer,
             param->line,
             param->as.param.name,
-            type_info(param->as.param.type, 0),
+            type_info(param->as.param.type, param->as.param.is_array, param->as.param.record_name),
             0,
             0,
             NULL
@@ -707,7 +949,7 @@ static void check_function(Analyzer *analyzer, AstNode *func)
     }
 
     analyzer->in_function = 0;
-    analyzer->current_return = KRATOS_TYPE_VOID;
+    analyzer->current_return = type_info_simple(KRATOS_TYPE_VOID, 0);
     analyzer->scope = inner.parent;
     scope_free(&inner);
 }
@@ -862,6 +1104,15 @@ int semantic_analyze_with_context(
     scope_init(&global, NULL);
     analyzer.scope = &global;
 
+    /* Pass 1: register all records */
+    for (size_t i = 0; i < program->as.program.declarations.count; i++) {
+        AstNode *node = program->as.program.declarations.items[i];
+        if (node->kind == AST_RECORD_DECL) {
+            record_type_add(&analyzer, node);
+        }
+    }
+
+    /* Pass 2: register functions */
     for (size_t i = 0; i < program->as.program.declarations.count; i++) {
         AstNode *node = program->as.program.declarations.items[i];
         if (node->kind == AST_FUNC_DECL) {
@@ -869,7 +1120,7 @@ int semantic_analyze_with_context(
                 &analyzer,
                 node->line,
                 node->as.func_decl.name,
-                type_info(node->as.func_decl.return_type, 0),
+                type_info(node->as.func_decl.return_type, 0, node->as.func_decl.return_record_name),
                 0,
                 1,
                 node
@@ -877,9 +1128,12 @@ int semantic_analyze_with_context(
         }
     }
 
+    /* Pass 3: typecheck top-level statements/declarations */
     for (size_t i = 0; i < program->as.program.declarations.count; i++) {
         AstNode *node = program->as.program.declarations.items[i];
-        if (node->kind == AST_VAR_DECL) {
+        if (node->kind == AST_RECORD_DECL) {
+            /* already registered in pass 1 */
+        } else if (node->kind == AST_VAR_DECL) {
             check_var_decl(&analyzer, node);
         } else if (node->kind == AST_FUNC_DECL) {
             check_function(&analyzer, node);
@@ -889,6 +1143,7 @@ int semantic_analyze_with_context(
     }
 
     scope_free(&global);
+    record_types_free(&analyzer);
     while (analyzer.wield_stack_count > 0) {
         stack_pop(&analyzer);
     }
