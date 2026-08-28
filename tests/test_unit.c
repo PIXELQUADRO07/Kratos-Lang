@@ -9,6 +9,17 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int write_test_file(const char *path, const char *source)
+{
+    FILE *file = fopen(path, "w");
+    if (file == NULL) {
+        return 0;
+    }
+    fputs(source, file);
+    fclose(file);
+    return 1;
+}
+
 static int g_failed = 0;
 static int g_passed = 0;
 
@@ -209,6 +220,35 @@ int main(void)
     expect_true(interp_run(indexed) == 0, "interp indexed assignment");
     ast_free(indexed);
 
+    AstNode *negative_index = parse_source(
+        "k_int[] values = [1];\n"
+        "k_void craft main() { shout(values[-1]); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser negative array index");
+    expect_true(semantic_analyze(negative_index, NULL) == 0, "semantic negative array index");
+    expect_true(interp_run(negative_index) != 0, "interp rejects negative array index");
+    ast_free(negative_index);
+
+    AstNode *past_end_index = parse_source(
+        "k_int[] values = [1];\n"
+        "k_void craft main() { shout(values[len(values)]); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser out of bounds array index");
+    expect_true(semantic_analyze(past_end_index, NULL) == 0, "semantic out of bounds array index");
+    expect_true(interp_run(past_end_index) != 0, "interp rejects out of bounds array index");
+    ast_free(past_end_index);
+
+    AstNode *const_array = parse_source(
+        "k_const k_int[] values = [1];\n"
+        "k_void craft main() { values[0] = 9; }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser const array assignment");
+    expect_true(semantic_analyze(const_array, NULL) != 0, "semantic rejects const array assignment");
+    ast_free(const_array);
+
     AstNode *lengths = parse_source(
         "k_string text = \"hello\";\n"
         "k_int[] values = [1, 2, 3];\n"
@@ -220,6 +260,16 @@ int main(void)
     expect_true(interp_run(lengths) == 0, "interp len builtin");
     ast_free(lengths);
 
+    AstNode *empty_array = parse_source(
+        "k_int[] empty = [];\n"
+        "k_void craft main() { shout(len(empty)); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser empty array length");
+    expect_true(semantic_analyze(empty_array, NULL) == 0, "semantic empty array length");
+    expect_true(interp_run(empty_array) == 0, "interp empty array length");
+    ast_free(empty_array);
+
     AstNode *strings = parse_source(
         "k_string left = \"hello, \";\n"
         "k_string right = \"Kratos\";\n"
@@ -230,6 +280,41 @@ int main(void)
     expect_true(semantic_analyze(strings, NULL) == 0, "semantic string concatenation");
     expect_true(interp_run(strings) == 0, "interp string concatenation");
     ast_free(strings);
+
+    AstNode *division_by_zero = parse_source(
+        "k_void craft main() { shout(4 / 0); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser division by zero");
+    expect_true(semantic_analyze(division_by_zero, NULL) == 0, "semantic division by zero");
+    expect_true(interp_run(division_by_zero) != 0, "interp rejects division by zero");
+    ast_free(division_by_zero);
+
+    const char *cycle_a_path = "/tmp/kratos_cycle_a.kratos";
+    const char *cycle_b_path = "/tmp/kratos_cycle_b.kratos";
+    const char *cycle_main_path = "/tmp/kratos_cycle_main.kratos";
+    expect_true(
+        write_test_file(cycle_a_path, "wield \"kratos_cycle_b.kratos\";\n") &&
+        write_test_file(cycle_b_path, "wield \"kratos_cycle_a.kratos\";\n") &&
+        write_test_file(cycle_main_path, "wield \"kratos_cycle_a.kratos\";\n"),
+        "write cyclic import fixtures"
+    );
+    AstNode *cyclic_import = parse_source("wield \"kratos_cycle_a.kratos\";\n", &had_error);
+    expect_true(!had_error, "parser cyclic import");
+    expect_true(semantic_analyze(cyclic_import, cycle_main_path) != 0, "semantic rejects cyclic import");
+    ast_free(cyclic_import);
+    remove(cycle_a_path);
+    remove(cycle_b_path);
+    remove(cycle_main_path);
+
+    AstNode *empty_strings = parse_source(
+        "k_void craft main() { shout(\"\" + \"x\"); shout(\"x\" + \"\"); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser empty string concatenation");
+    expect_true(semantic_analyze(empty_strings, NULL) == 0, "semantic empty string concatenation");
+    expect_true(interp_run(empty_strings) == 0, "interp empty string concatenation");
+    ast_free(empty_strings);
 
     AstNode *numbers = parse_source(
         "k_float a = .5;\n"
@@ -291,6 +376,149 @@ int main(void)
     expect_true(semantic_analyze(converted_text, NULL) == 0, "semantic string conversions");
     expect_true(interp_run(converted_text) == 0, "interp string conversions");
     ast_free(converted_text);
+
+    /* --- Record / Struct Tests --- */
+
+    /* 1. Basic record declaration, literal, and member access */
+    AstNode *rec_basic = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point origin = Point { x: 10, y: 20 };\n"
+        "k_void craft main() { shout(origin.x); shout(origin.y); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser basic record");
+    expect_true(semantic_analyze(rec_basic, NULL) == 0, "semantic basic record");
+    expect_true(interp_run(rec_basic) == 0, "interp basic record");
+    ast_free(rec_basic);
+
+    /* 2. Member mutation */
+    AstNode *rec_mutation = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: 1, y: 2 };\n"
+        "k_void craft main() { p.x = 99; shout(p.x); shout(p.y); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser record mutation");
+    expect_true(semantic_analyze(rec_mutation, NULL) == 0, "semantic record mutation");
+    expect_true(interp_run(rec_mutation) == 0, "interp record mutation");
+    ast_free(rec_mutation);
+
+    /* 3. Record as parameter and return value (value semantics / copy) */
+    AstNode *rec_func = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point craft move_point(Point pt, k_int dx) {\n"
+        "    pt.x = pt.x + dx;\n"
+        "    yield pt;\n"
+        "}\n"
+        "k_void craft main() {\n"
+        "    Point a = Point { x: 5, y: 10 };\n"
+        "    Point b = move_point(a, 3);\n"
+        "    shout(a.x);\n"
+        "    shout(b.x);\n"
+        "}\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser record function");
+    expect_true(semantic_analyze(rec_func, NULL) == 0, "semantic record function");
+    expect_true(interp_run(rec_func) == 0, "interp record function");
+    ast_free(rec_func);
+
+    /* 4. Array of records */
+    AstNode *rec_array = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point[] pts = [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }];\n"
+        "k_void craft main() {\n"
+        "    shout(pts[0].x);\n"
+        "    shout(pts[1].y);\n"
+        "}\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser array of records");
+    expect_true(semantic_analyze(rec_array, NULL) == 0, "semantic array of records");
+    expect_true(interp_run(rec_array) == 0, "interp array of records");
+    ast_free(rec_array);
+
+    /* 5. Nested records */
+    AstNode *rec_nested = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "record Line { Point p1; Point p2; }\n"
+        "Line l = Line { p1: Point { x: 1, y: 2 }, p2: Point { x: 10, y: 20 } };\n"
+        "k_void craft main() {\n"
+        "    shout(l.p1.x);\n"
+        "    shout(l.p2.y);\n"
+        "}\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser nested records");
+    expect_true(semantic_analyze(rec_nested, NULL) == 0, "semantic nested records");
+    expect_true(interp_run(rec_nested) == 0, "interp nested records");
+    ast_free(rec_nested);
+
+    /* 6. Semantic error: unknown field in literal */
+    AstNode *rec_err1 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: 1, z: 2 };\n"
+        "k_void craft main() { shout(p.x); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser unknown field in literal");
+    expect_true(semantic_analyze(rec_err1, NULL) != 0, "semantic rejects unknown field in literal");
+    ast_free(rec_err1);
+
+    /* 7. Semantic error: missing field in literal */
+    AstNode *rec_err2 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: 1 };\n"
+        "k_void craft main() { shout(p.x); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser missing field in literal");
+    expect_true(semantic_analyze(rec_err2, NULL) != 0, "semantic rejects missing field in literal");
+    ast_free(rec_err2);
+
+    /* 8. Semantic error: duplicate field in literal */
+    AstNode *rec_err3 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: 1, x: 2, y: 3 };\n"
+        "k_void craft main() { shout(p.x); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser duplicate field in literal");
+    expect_true(semantic_analyze(rec_err3, NULL) != 0, "semantic rejects duplicate field in literal");
+    ast_free(rec_err3);
+
+    /* 9. Semantic error: field type mismatch */
+    AstNode *rec_err4 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: \"text\", y: 3 };\n"
+        "k_void craft main() { shout(p.x); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser field type mismatch");
+    expect_true(semantic_analyze(rec_err4, NULL) != 0, "semantic rejects field type mismatch");
+    ast_free(rec_err4);
+
+    /* 10. Semantic error: access unknown member */
+    AstNode *rec_err5 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "Point p = Point { x: 1, y: 2 };\n"
+        "k_void craft main() { shout(p.z); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser access unknown member");
+    expect_true(semantic_analyze(rec_err5, NULL) != 0, "semantic rejects access unknown member");
+    ast_free(rec_err5);
+
+    /* 11. Semantic error: assign to member of k_const record */
+    AstNode *rec_err6 = parse_source(
+        "record Point { k_int x; k_int y; }\n"
+        "k_const Point p = Point { x: 1, y: 2 };\n"
+        "k_void craft main() { p.x = 5; }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser assign to member of const record");
+    expect_true(semantic_analyze(rec_err6, NULL) != 0, "semantic rejects mutation of const record member");
+    ast_free(rec_err6);
 
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
