@@ -173,21 +173,62 @@ static KratosType token_to_kratos_type(TokenType type)
  * grammaticale, e verra' applicata quando esistera' un semantic analyzer
  * (vedi docs/types.md).
  */
-static KratosType parse_type(Parser *parser)
+static KratosType parse_type_extended(Parser *parser, char **out_record_name)
 {
-    if (!check_type_token(parser->current.type)) {
-        error_at(parser, parser->current, DIAG_K203,
-             "expected a type (k_int, k_float, k_bool, k_char, k_string or k_void)");
-        KratosType fallback = KRATOS_TYPE_VOID;
-        if (!check(parser, TOKEN_EOF)) {
-            advance_token(parser);
+    if (out_record_name != NULL) {
+        *out_record_name = NULL;
+    }
+    if (check_type_token(parser->current.type)) {
+        TokenType type_token = parser->current.type;
+        advance_token(parser);
+        return token_to_kratos_type(type_token);
+    }
+    if (check(parser, TOKEN_IDENTIFIER)) {
+        Token rec_token = parser->current;
+        advance_token(parser);
+        if (out_record_name != NULL) {
+            *out_record_name = token_to_cstring(rec_token);
         }
-        return fallback;
+        return KRATOS_TYPE_RECORD;
     }
 
-    TokenType type_token = parser->current.type;
-    advance_token(parser);
-    return token_to_kratos_type(type_token);
+    error_at(parser, parser->current, DIAG_K203,
+             "expected a type (k_int, k_float, k_bool, k_char, k_string, k_void or record name)");
+    KratosType fallback = KRATOS_TYPE_VOID;
+    if (!check(parser, TOKEN_EOF)) {
+        advance_token(parser);
+    }
+    return fallback;
+}
+
+static int is_var_decl_starting(Parser *parser)
+{
+    if (check(parser, TOKEN_K_CONST) || check_type_token(parser->current.type)) {
+        return 1;
+    }
+    if (check(parser, TOKEN_IDENTIFIER)) {
+        Parser saved_p = *parser;
+        Lexer saved_l = *parser->lexer;
+
+        advance_token(parser);
+        while (match(parser, TOKEN_LBRACKET)) {
+            if (!match(parser, TOKEN_RBRACKET)) {
+                break;
+            }
+        }
+        int is_decl = 0;
+        if (check(parser, TOKEN_IDENTIFIER)) {
+            advance_token(parser);
+            if (check(parser, TOKEN_ASSIGN) || check(parser, TOKEN_CRAFT)) {
+                is_decl = 1;
+            }
+        }
+
+        *parser = saved_p;
+        *parser->lexer = saved_l;
+        return is_decl;
+    }
+    return 0;
 }
 
 
@@ -196,7 +237,7 @@ static KratosType parse_type(Parser *parser)
  * Precedenza, dalla piu' bassa alla piu' alta:
  *   or  ->  and  ->  uguaglianza (== !=)  ->  confronto (< > <= >=)
  *   ->  additiva (+ -)  ->  moltiplicativa (* / %)  ->  unaria (not, -)
- *   ->  postfix (indicizzazione)  ->  primaria
+ *   ->  postfix (indicizzazione, accesso a campi)  ->  primaria
  */
 
 static AstNode *parse_expression(Parser *parser);
@@ -256,7 +297,7 @@ static AstNode *parse_primary(Parser *parser)
         return inner;
     }
 
-    /* identifier, chiamata "identifier(args)" o indicizzazione "identifier[expr]" */
+    /* identifier, chiamata "identifier(args)", record literal "Point { ... }" */
     if (check(parser, TOKEN_IDENTIFIER)) {
         Token name_token = parser->current;
         advance_token(parser);
@@ -265,7 +306,7 @@ static AstNode *parse_primary(Parser *parser)
         AstNode *node;
 
         if (match(parser, TOKEN_LPAREN)) {
-            /* invocazione: sintassi decisa in docs/functions.md, non ancora nella grammatica formale */
+            /* invocazione */
             node = ast_new_call_expr(line, name);
             if (!check(parser, TOKEN_RPAREN)) {
                 do {
@@ -273,19 +314,26 @@ static AstNode *parse_primary(Parser *parser)
                 } while (match(parser, TOKEN_COMMA));
             }
             expect(parser, TOKEN_RPAREN, "expected ')' after call arguments");
+        } else if (match(parser, TOKEN_LBRACE)) {
+            /* record literal */
+            node = ast_new_record_literal(line, name);
+            if (!check(parser, TOKEN_RBRACE)) {
+                do {
+                    size_t f_line = parser->current.line;
+                    Token f_tok = expect(parser, TOKEN_IDENTIFIER, "expected field name in record literal");
+                    char *f_name = token_to_cstring(f_tok);
+                    expect(parser, TOKEN_COLON, "expected ':' after field name");
+                    AstNode *f_val = parse_expression(parser);
+                    ast_node_list_push(&node->as.record_literal.fields, ast_new_field_init(f_line, f_name, f_val));
+                    free(f_name);
+                } while (match(parser, TOKEN_COMMA));
+            }
+            expect(parser, TOKEN_RBRACE, "expected '}' after record literal fields");
         } else {
             node = ast_new_identifier_expr(line, name);
         }
 
         free(name);
-
-        /* indicizzazione postfix: identifier[expr] o name(args)[expr] */
-        while (match(parser, TOKEN_LBRACKET)) {
-            AstNode *index = parse_expression(parser);
-            expect(parser, TOKEN_RBRACKET, "expected ']' after index");
-            node = ast_new_index_expr(line, node, index);
-        }
-
         return node;
     }
 
@@ -293,11 +341,34 @@ static AstNode *parse_primary(Parser *parser)
     if (!check(parser, TOKEN_EOF)) {
         advance_token(parser);
     }
-    /* Nodo segnaposto, cosi' il chiamante puo' proseguire senza controllare NULL ovunque. */
+    /* Nodo segnaposto */
     return ast_new_literal_int(line, 0);
 }
 
-/* unary = ( "not" | "-" ) unary | postfix_primary ; */
+static AstNode *parse_postfix(Parser *parser)
+{
+    AstNode *node = parse_primary(parser);
+
+    while (1) {
+        size_t line = parser->current.line;
+        if (match(parser, TOKEN_LBRACKET)) {
+            AstNode *index = parse_expression(parser);
+            expect(parser, TOKEN_RBRACKET, "expected ']' after index");
+            node = ast_new_index_expr(line, node, index);
+        } else if (match(parser, TOKEN_DOT)) {
+            Token member_token = expect(parser, TOKEN_IDENTIFIER, "expected member name after '.'");
+            char *member_name = token_to_cstring(member_token);
+            node = ast_new_member_expr(line, node, member_name);
+            free(member_name);
+        } else {
+            break;
+        }
+    }
+
+    return node;
+}
+
+/* unary = ( "not" | "-" ) unary | postfix ; */
 static AstNode *parse_unary(Parser *parser)
 {
     size_t line = parser->current.line;
@@ -309,7 +380,7 @@ static AstNode *parse_unary(Parser *parser)
         return ast_new_unary_expr(line, op, operand);
     }
 
-    return parse_primary(parser);
+    return parse_postfix(parser);
 }
 
 static AstNode *parse_multiplicative(Parser *parser)
@@ -418,7 +489,7 @@ static AstNode *parse_assignment_or_expression(Parser *parser)
     size_t line = parser->current.line;
     AstNode *expr = parse_expression(parser);
 
-    if ((expr->kind == AST_IDENTIFIER_EXPR || expr->kind == AST_INDEX_EXPR) &&
+    if ((expr->kind == AST_IDENTIFIER_EXPR || expr->kind == AST_INDEX_EXPR || expr->kind == AST_MEMBER_EXPR) &&
         check(parser, TOKEN_ASSIGN)) {
         advance_token(parser);
         AstNode *value = parse_expression(parser);
@@ -459,7 +530,8 @@ static AstNode *parse_var_decl(Parser *parser)
     size_t line = parser->current.line;
 
     int is_const = match(parser, TOKEN_K_CONST);
-    KratosType type = parse_type(parser);
+    char *record_name = NULL;
+    KratosType type = parse_type_extended(parser, &record_name);
 
     int is_array = 0;
     while (match(parser, TOKEN_LBRACKET)) {
@@ -474,8 +546,48 @@ static AstNode *parse_var_decl(Parser *parser)
     AstNode *initializer = parse_expression(parser);
     expect(parser, TOKEN_SEMICOLON, "expected ';' after declaration");
 
-    AstNode *node = ast_new_var_decl(line, is_const, is_array, type, name, initializer);
+    AstNode *node = ast_new_var_decl(line, is_const, is_array, type, record_name, name, initializer);
+    free(record_name);
     free(name);
+    return node;
+}
+
+/* record_decl = "record" identifier "{" { type [ "[]" ] identifier ";" } "}" ; */
+static AstNode *parse_record_decl(Parser *parser)
+{
+    size_t line = parser->current.line;
+    advance_token(parser); /* consuma "record" */
+
+    Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected record name after 'record'");
+    char *name = token_to_cstring(name_token);
+
+    AstNode *node = ast_new_record_decl(line, name);
+    free(name);
+
+    expect(parser, TOKEN_LBRACE, "expected '{' after record name");
+
+    while (!check(parser, TOKEN_RBRACE) && !check(parser, TOKEN_EOF)) {
+        size_t field_line = parser->current.line;
+        char *field_rec_name = NULL;
+        KratosType field_type = parse_type_extended(parser, &field_rec_name);
+
+        int is_array = 0;
+        while (match(parser, TOKEN_LBRACKET)) {
+            expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
+            is_array++;
+        }
+
+        Token field_name_token = expect(parser, TOKEN_IDENTIFIER, "expected field name");
+        char *field_name = token_to_cstring(field_name_token);
+        expect(parser, TOKEN_SEMICOLON, "expected ';' after field declaration");
+
+        AstNode *field_node = ast_new_record_field(field_line, field_type, is_array, field_rec_name, field_name);
+        free(field_rec_name);
+        free(field_name);
+        ast_node_list_push(&node->as.record_decl.fields, field_node);
+    }
+
+    expect(parser, TOKEN_RBRACE, "expected '}' after record declaration");
     return node;
 }
 
@@ -565,7 +677,8 @@ static AstNode *parse_sweep_stmt(Parser *parser)
     advance_token(parser); /* consuma "sweep" */
 
     expect(parser, TOKEN_LPAREN, "expected '(' after 'sweep'");
-    KratosType element_type = parse_type(parser);
+    char *elem_rec_name = NULL;
+    KratosType element_type = parse_type_extended(parser, &elem_rec_name);
     Token elem_token = expect(parser, TOKEN_IDENTIFIER, "expected the element name in 'sweep'");
     char *element_name = token_to_cstring(elem_token);
 
@@ -577,7 +690,8 @@ static AstNode *parse_sweep_stmt(Parser *parser)
     expect(parser, TOKEN_RPAREN, "expected ')' after 'sweep' collection");
     AstNode *body = parse_block(parser);
 
-    AstNode *node = ast_new_sweep_stmt(line, element_type, element_name, collection_name, body);
+    AstNode *node = ast_new_sweep_stmt(line, element_type, elem_rec_name, element_name, collection_name, body);
+    free(elem_rec_name);
     free(element_name);
     free(collection_name);
     return node;
@@ -642,16 +756,15 @@ static AstNode *parse_expression_statement(Parser *parser)
 
 static AstNode *parse_statement(Parser *parser)
 {
-    switch (parser->current.type) {
-        case TOKEN_K_INT:
-        case TOKEN_K_FLOAT:
-        case TOKEN_K_BOOL:
-        case TOKEN_K_CHAR:
-        case TOKEN_K_STRING:
-        case TOKEN_K_VOID:
-        case TOKEN_K_CONST:
-            return parse_var_decl(parser);
+    if (check(parser, TOKEN_RECORD)) {
+        return parse_record_decl(parser);
+    }
 
+    if (is_var_decl_starting(parser)) {
+        return parse_var_decl(parser);
+    }
+
+    switch (parser->current.type) {
         case TOKEN_IF:
             return parse_if_stmt(parser);
 
@@ -703,14 +816,14 @@ static AstNode *parse_statement(Parser *parser)
 /* --- Dichiarazioni di primo livello --- */
 
 /* function = return_type "craft" identifier "(" [ params ] ")" block ; */
-static AstNode *parse_function_decl(Parser *parser, KratosType return_type, size_t line)
+static AstNode *parse_function_decl(Parser *parser, KratosType return_type, const char *return_record_name, size_t line)
 {
     advance_token(parser); /* consuma "craft" */
 
     Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a function name after 'craft'");
     char *name = token_to_cstring(name_token);
 
-    AstNode *func = ast_new_func_decl(line, return_type, name, NULL);
+    AstNode *func = ast_new_func_decl(line, return_type, return_record_name, name, NULL);
     free(name);
 
     expect(parser, TOKEN_LPAREN, "expected '(' after function name");
@@ -718,10 +831,17 @@ static AstNode *parse_function_decl(Parser *parser, KratosType return_type, size
     if (!check(parser, TOKEN_RPAREN)) {
         do {
             size_t param_line = parser->current.line;
-            KratosType param_type = parse_type(parser);
+            char *param_rec_name = NULL;
+            KratosType param_type = parse_type_extended(parser, &param_rec_name);
+            int is_array = 0;
+            while (match(parser, TOKEN_LBRACKET)) {
+                expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
+                is_array++;
+            }
             Token param_name_token = expect(parser, TOKEN_IDENTIFIER, "expected a parameter name");
             char *param_name = token_to_cstring(param_name_token);
-            ast_node_list_push(&func->as.func_decl.params, ast_new_param(param_line, param_type, param_name));
+            ast_node_list_push(&func->as.func_decl.params, ast_new_param(param_line, param_type, is_array, param_rec_name, param_name));
+            free(param_rec_name);
             free(param_name);
         } while (match(parser, TOKEN_COMMA));
     }
@@ -743,15 +863,22 @@ static AstNode *parse_top_level(Parser *parser)
 {
     size_t line = parser->current.line;
 
+    if (check(parser, TOKEN_RECORD)) {
+        return parse_record_decl(parser);
+    }
+
     if (check(parser, TOKEN_WIELD)) {
         return parse_wield_stmt(parser);
     }
 
     int is_const = match(parser, TOKEN_K_CONST);
-    KratosType type = parse_type(parser);
+    char *record_name = NULL;
+    KratosType type = parse_type_extended(parser, &record_name);
 
     if (!is_const && check(parser, TOKEN_CRAFT)) {
-        return parse_function_decl(parser, type, line);
+        AstNode *func = parse_function_decl(parser, type, record_name, line);
+        free(record_name);
+        return func;
     }
 
     int is_array = 0;
@@ -767,7 +894,8 @@ static AstNode *parse_top_level(Parser *parser)
     AstNode *initializer = parse_expression(parser);
     expect(parser, TOKEN_SEMICOLON, "expected ';' after declaration");
 
-    AstNode *node = ast_new_var_decl(line, is_const, is_array, type, name, initializer);
+    AstNode *node = ast_new_var_decl(line, is_const, is_array, type, record_name, name, initializer);
+    free(record_name);
     free(name);
     return node;
 }
