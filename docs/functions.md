@@ -16,6 +16,7 @@ arrays.
 one-dimensional arrays.
 
 `to_string`, `to_int`, and `to_float` convert scalar values explicitly.
+Numeric conversions also accept valid numeric strings.
 
 String concatenation uses `+`, for example `"hello, " + name`.
 

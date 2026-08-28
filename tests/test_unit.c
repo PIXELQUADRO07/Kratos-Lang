@@ -283,6 +283,15 @@ int main(void)
     expect_true(interp_run(converted) == 0, "interp scalar conversions");
     ast_free(converted);
 
+    AstNode *converted_text = parse_source(
+        "k_void craft main() { shout(to_int(\"42\")); shout(to_float(\"3.5\")); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser string conversions");
+    expect_true(semantic_analyze(converted_text, NULL) == 0, "semantic string conversions");
+    expect_true(interp_run(converted_text) == 0, "interp string conversions");
+    ast_free(converted_text);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

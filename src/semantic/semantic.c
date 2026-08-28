@@ -380,7 +380,8 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                     return type_info(KRATOS_TYPE_STRING, 0);
                 }
                 if (argument.type != KRATOS_TYPE_INT && argument.type != KRATOS_TYPE_FLOAT &&
-                    argument.type != KRATOS_TYPE_BOOL && argument.type != KRATOS_TYPE_CHAR) {
+                    argument.type != KRATOS_TYPE_BOOL && argument.type != KRATOS_TYPE_CHAR &&
+                    argument.type != KRATOS_TYPE_STRING) {
                     semantic_error(analyzer, node->line, "tipo non convertibile");
                 }
                 return strcmp(node->as.call_expr.callee, "to_int") == 0

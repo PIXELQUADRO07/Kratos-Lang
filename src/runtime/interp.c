@@ -706,6 +706,23 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 } else if (argument.kind == VAL_FLOAT) {
                     result = argument;
                     argument.kind = VAL_VOID;
+                } else if (argument.kind == VAL_STRING) {
+                    char *end = NULL;
+                    if (strcmp(node->as.call_expr.callee, "to_int") == 0) {
+                        long long value = strtoll(argument.as.s != NULL ? argument.as.s : "", &end, 10);
+                        if (end == argument.as.s || end == NULL || *end != '\0') {
+                            runtime_error(interp, node->line, "stringa non convertibile in k_int");
+                        } else {
+                            result = val_int((int64_t)value);
+                        }
+                    } else {
+                        double value = strtod(argument.as.s != NULL ? argument.as.s : "", &end);
+                        if (end == argument.as.s || end == NULL || *end != '\0') {
+                            runtime_error(interp, node->line, "stringa non convertibile in k_float");
+                        } else {
+                            result = val_float(value);
+                        }
+                    }
                 } else {
                     runtime_error(interp, node->line, "tipo non convertibile");
                 }
