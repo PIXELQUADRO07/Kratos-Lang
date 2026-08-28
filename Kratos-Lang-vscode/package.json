@@ -1,0 +1,31 @@
+{
+  "name": "kratos-lang",
+  "displayName": "Kratos-Lang",
+  "description": "Language support for Kratos-Lang",
+  "version": "0.1.0",
+  "publisher": "kratos-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": ">=1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "kratos",
+        "aliases": ["Kratos", "Kratos-Lang"],
+        "extensions": [".kratos"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kratos",
+        "scopeName": "source.kratos",
+        "path": "./syntaxes/kratos.tmLanguage.json"
+      }
+    ]
+  }
+}
