@@ -174,7 +174,7 @@ def main() -> None:
                         "hoverProvider": True,
                         "definitionProvider": True,
                     },
-                    "serverInfo": {"name": "kratos-lsp", "version": "0.1.0"},
+                    "serverInfo": {"name": "kratos-lsp", "version": "0.2.0"},
                 },
             )
         elif method == "shutdown":
