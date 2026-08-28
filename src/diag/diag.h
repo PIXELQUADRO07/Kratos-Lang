@@ -53,6 +53,7 @@ typedef struct {
 #define DIAG_K312 312 /* invalid construct at this level */
 #define DIAG_K313 313 /* nested arrays */
 #define DIAG_K314 314 /* bad call */
+#define DIAG_K315 315 /* record type or field error */
 
 void diag_context_init(DiagContext *ctx, const char *filename, const char *source);
 
