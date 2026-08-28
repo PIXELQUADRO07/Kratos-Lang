@@ -213,10 +213,10 @@ AstNode *ast_new_wield_stmt(size_t line, const char *path)
     return node;
 }
 
-AstNode *ast_new_assign(size_t line, const char *target, AstNode *value)
+AstNode *ast_new_assign(size_t line, AstNode *target, AstNode *value)
 {
     AstNode *node = new_node(AST_ASSIGN, line);
-    node->as.assign.target = duplicate_string(target);
+    node->as.assign.target = target;
     node->as.assign.value = value;
     return node;
 }
@@ -397,7 +397,7 @@ void ast_free(AstNode *node)
             break;
 
         case AST_ASSIGN:
-            free(node->as.assign.target);
+            ast_free(node->as.assign.target);
             ast_free(node->as.assign.value);
             break;
 
@@ -589,7 +589,8 @@ void ast_print(const AstNode *node, int indent)
             break;
 
         case AST_ASSIGN:
-            printf("Assign %s =\n", node->as.assign.target);
+            printf("Assign target =\n");
+            ast_print(node->as.assign.target, indent + 1);
             ast_print(node->as.assign.value, indent + 1);
             break;
 

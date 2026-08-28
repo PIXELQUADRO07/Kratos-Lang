@@ -163,9 +163,9 @@ static void emit_expr(Emitter *e, const AstNode *node)
             break;
 
         case AST_INDEX_EXPR:
-            fputs("((", e->out);
+            fputs("(((int64_t *)((", e->out);
             emit_expr(e, node->as.index_expr.array);
-            fputs(").items[", e->out);
+            fputs(").items))[", e->out);
             emit_expr(e, node->as.index_expr.index);
             fputs("])", e->out);
             break;
@@ -344,7 +344,8 @@ static void emit_stmt(Emitter *e, const AstNode *node)
 
         case AST_ASSIGN:
             emit_indent(e);
-            fprintf(e->out, "%s = ", node->as.assign.target);
+            emit_expr(e, node->as.assign.target);
+            fputs(" = ", e->out);
             emit_expr(e, node->as.assign.value);
             fputs(";\n", e->out);
             break;

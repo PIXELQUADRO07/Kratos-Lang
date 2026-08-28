@@ -246,7 +246,7 @@ struct AstNode {
 
         /* AST_ASSIGN */
         struct {
-            char *target;
+            AstNode *target;
             AstNode *value;
         } assign;
 
@@ -322,7 +322,7 @@ AstNode *ast_new_push_stmt(size_t line);
 AstNode *ast_new_yield_stmt(size_t line, AstNode *value);
 AstNode *ast_new_shout_stmt(size_t line, AstNode *value);
 AstNode *ast_new_wield_stmt(size_t line, const char *path);
-AstNode *ast_new_assign(size_t line, const char *target, AstNode *value);
+AstNode *ast_new_assign(size_t line, AstNode *target, AstNode *value);
 AstNode *ast_new_expr_stmt(size_t line, AstNode *expression);
 AstNode *ast_new_binary_expr(size_t line, TokenType operator, AstNode *left, AstNode *right);
 AstNode *ast_new_identifier_expr(size_t line, const char *name);

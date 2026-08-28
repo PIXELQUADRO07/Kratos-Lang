@@ -395,7 +395,7 @@ static AstNode *parse_expression(Parser *parser)
  * Espressione oppure assegnamento, SENZA consumare il ';' finale: usata sia
  * per lo statement di assegnamento sia per la clausola di step di "drive"
  * (che non ha ';' prima della ")"). Se l'espressione analizzata e' un
- * semplice identificatore seguito da "=", diventa un nodo AST_ASSIGN;
+ * identificatore o indicizzazione seguito da "=", diventa un nodo AST_ASSIGN;
  * altrimenti l'espressione e' restituita cosi' com'e'.
  */
 static AstNode *parse_assignment_or_expression(Parser *parser)
@@ -403,12 +403,11 @@ static AstNode *parse_assignment_or_expression(Parser *parser)
     size_t line = parser->current.line;
     AstNode *expr = parse_expression(parser);
 
-    if (expr->kind == AST_IDENTIFIER_EXPR && check(parser, TOKEN_ASSIGN)) {
+    if ((expr->kind == AST_IDENTIFIER_EXPR || expr->kind == AST_INDEX_EXPR) &&
+        check(parser, TOKEN_ASSIGN)) {
         advance_token(parser);
         AstNode *value = parse_expression(parser);
-        AstNode *assign = ast_new_assign(line, expr->as.identifier_expr.name, value);
-        ast_free(expr);
-        return assign;
+        return ast_new_assign(line, expr, value);
     }
 
     return expr;

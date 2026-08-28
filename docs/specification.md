@@ -78,7 +78,7 @@ statement     = declaration
 
 wield_stmt    = "wield" string ";" ;
 
-assignment    = identifier "=" expression ";" ;
+assignment    = ( identifier | identifier "[" expression "]" ) "=" expression ";" ;
 expr_stmt     = expression ";" ;
 
 if_stmt       = "if" "(" expression ")" block

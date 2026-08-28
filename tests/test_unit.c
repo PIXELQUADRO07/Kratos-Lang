@@ -156,6 +156,16 @@ int main(void)
     expect_true(interp_run(run) == 0, "interp shout add");
     ast_free(run);
 
+    AstNode *indexed = parse_source(
+        "k_int[] values = [1, 2];\n"
+        "k_void craft main() { values[0] = 7; shout(values[0]); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser indexed assignment");
+    expect_true(semantic_analyze(indexed, NULL) == 0, "semantic indexed assignment");
+    expect_true(interp_run(indexed) == 0, "interp indexed assignment");
+    ast_free(indexed);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

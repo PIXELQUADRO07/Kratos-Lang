@@ -574,16 +574,40 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
             break;
 
         case AST_ASSIGN: {
-            Symbol *symbol = scope_find(analyzer->scope, node->as.assign.target);
-            if (symbol == NULL || symbol->is_function) {
-                semantic_error(analyzer, node->line, "assegnamento a un nome non dichiarato");
+            TypeInfo target;
+            if (node->as.assign.target->kind == AST_IDENTIFIER_EXPR) {
+                Symbol *symbol = scope_find(analyzer->scope, node->as.assign.target->as.identifier_expr.name);
+                if (symbol == NULL || symbol->is_function) {
+                    semantic_error(analyzer, node->line, "assegnamento a un nome non dichiarato");
+                    break;
+                }
+                if (symbol->is_const) {
+                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                }
+                target = symbol->type;
+            } else if (node->as.assign.target->kind == AST_INDEX_EXPR) {
+                AstNode *array_expr = node->as.assign.target->as.index_expr.array;
+                TypeInfo array = check_expr(analyzer, array_expr);
+                TypeInfo index = check_expr(analyzer, node->as.assign.target->as.index_expr.index);
+                if (!array.is_array) {
+                    semantic_error(analyzer, node->line, "assegnamento indicizzato richiede un array");
+                }
+                if (index.is_array || index.type != KRATOS_TYPE_INT) {
+                    semantic_error(analyzer, node->line, "l'indice deve essere k_int");
+                }
+                if (array_expr->kind == AST_IDENTIFIER_EXPR) {
+                    Symbol *symbol = scope_find(analyzer->scope, array_expr->as.identifier_expr.name);
+                    if (symbol != NULL && symbol->is_const) {
+                        semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                    }
+                }
+                target = type_info(array.type, 0);
+            } else {
+                semantic_error(analyzer, node->line, "destinazione di assegnamento non valida");
                 break;
             }
-            if (symbol->is_const) {
-                semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
-            }
             TypeInfo value = check_expr(analyzer, node->as.assign.value);
-            if (!assignable(value, symbol->type)) {
+            if (!assignable(value, target)) {
                 semantic_error(analyzer, node->line, "tipo di assegnamento incompatibile");
             }
             break;
