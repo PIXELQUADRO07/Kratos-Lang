@@ -19,6 +19,25 @@ COMPLETION_WORDS = (
     "craft", "yield", "shout", "wield", "true", "false", "not",
 )
 
+HOVER_TEXT = {
+    "craft": "`craft` declares a function.",
+    "yield": "`yield` returns a value from a craft.",
+    "shout": "`shout(expression);` writes a value to standard output.",
+    "wield": "`wield \"path\";` imports another Kratos source file.",
+    "hold": "`hold (condition) { ... }` repeats while a condition is true.",
+    "press": "`press { ... } hold (condition);` executes a post-condition loop.",
+    "drive": "`drive (...) { ... }` runs a three-part loop.",
+    "sweep": "`sweep (type name in collection) { ... }` iterates an array.",
+    "not": "`not` negates a `k_bool` expression.",
+    "k_int": "Signed integer type.",
+    "k_float": "Floating-point type.",
+    "k_bool": "Boolean type.",
+    "k_char": "Character type.",
+    "k_string": "String type.",
+    "k_const": "Declares a value that cannot be reassigned.",
+    "k_void": "The no-value return type for a craft.",
+}
+
 
 def read_message() -> dict[str, Any] | None:
     content_length = None
@@ -105,6 +124,36 @@ def completion_items(source: str, line: int, character: int) -> list[dict[str, s
     ]
 
 
+def word_at(source: str, line: int, character: int) -> str:
+    lines = source.splitlines()
+    current_line = lines[line] if 0 <= line < len(lines) else ""
+    left = current_line[:character]
+    right = current_line[character:]
+    left_match = re.search(r"[A-Za-z_][A-Za-z0-9_]*$", left)
+    right_match = re.match(r"[A-Za-z0-9_]*", right)
+    return (left_match.group(0) if left_match else "") + (right_match.group(0) if right_match else "")
+
+
+def definition_for(uri: str, source: str, word: str) -> dict[str, Any] | None:
+    pattern = re.compile(
+        rf"\b(?:k_const\s+)?(?:k_int|k_float|k_bool|k_char|k_string|k_void)\s+"
+        rf"(?:craft\s+)?(?:\[\]\s+)?{re.escape(word)}\b"
+    )
+    match = pattern.search(source)
+    if match is None:
+        return None
+    line = source.count("\n", 0, match.start())
+    line_start = source.rfind("\n", 0, match.start()) + 1
+    column = match.start() - line_start
+    return {
+        "uri": uri,
+        "range": {
+            "start": {"line": line, "character": column},
+            "end": {"line": line, "character": column + len(word)},
+        },
+    }
+
+
 def main() -> None:
     documents: dict[str, str] = {}
     while True:
@@ -122,6 +171,8 @@ def main() -> None:
                     "capabilities": {
                         "textDocumentSync": {"openClose": True, "change": 1},
                         "completionProvider": {"triggerCharacters": ["_"]},
+                        "hoverProvider": True,
+                        "definitionProvider": True,
                     },
                     "serverInfo": {"name": "kratos-lsp", "version": "0.1.0"},
                 },
@@ -155,6 +206,25 @@ def main() -> None:
                     ),
                 },
             )
+        elif method == "textDocument/hover":
+            document = params["textDocument"]
+            uri = document["uri"]
+            position = params["position"]
+            word = word_at(documents.get(uri, ""), position["line"], position["character"])
+            response(
+                request_id,
+                {"contents": {"kind": "markdown", "value": HOVER_TEXT[word]}}
+                if word in HOVER_TEXT
+                else None,
+            )
+        elif method == "textDocument/definition":
+            document = params["textDocument"]
+            uri = document["uri"]
+            position = params["position"]
+            source = documents.get(uri, "")
+            word = word_at(source, position["line"], position["character"])
+            location = definition_for(uri, source, word)
+            response(request_id, [location] if location is not None else [])
         elif request_id is not None:
             send_message(
                 {
