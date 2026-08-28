@@ -1,0 +1,123 @@
+{
+  "name": "Kratos",
+  "scopeName": "source.kratos",
+  "fileTypes": ["kratos"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#characters" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#operators" },
+    { "include": "#numbers" },
+    { "include": "#functions" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.kratos",
+          "begin": "\\$",
+          "end": "\\$",
+          "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.kratos" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.comment.end.kratos" } }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.kratos",
+          "begin": "\"",
+          "end": "\"",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.kratos" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.kratos" } },
+          "patterns": [
+            { "name": "constant.character.escape.kratos", "match": "\\\\(?:[ntr0\\\"']|.)" }
+          ]
+        }
+      ]
+    },
+    "characters": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.kratos",
+          "begin": "'",
+          "end": "'",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.kratos" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.kratos" } },
+          "patterns": [
+            { "name": "constant.character.escape.kratos", "match": "\\\\(?:[ntr0\\\"']|.)" }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "storage.type.kratos",
+          "match": "\\b(?:k_int|k_float|k_bool|k_char|k_string|k_void)\\b"
+        },
+        {
+          "name": "storage.modifier.kratos",
+          "match": "\\bk_const\\b"
+        },
+        {
+          "name": "keyword.control.kratos",
+          "match": "\\b(?:if|elif|else|hold|press|drive|sweep|in|snap|push)\\b"
+        },
+        {
+          "name": "keyword.declaration.kratos",
+          "match": "\\b(?:craft|yield)\\b"
+        },
+        {
+          "name": "support.function.kratos",
+          "match": "\\b(?:shout|wield)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.kratos",
+          "match": "\\bnot\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.kratos", "match": "\\b(?:true|false)\\b" }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.kratos",
+          "match": "(?:==|!=|<=|>=|&&|\\|\\||=|\\+|-|\\*|/|%)"
+        },
+        {
+          "name": "punctuation.separator.kratos",
+          "match": "[;,.]"
+        },
+        {
+          "name": "punctuation.brackets.kratos",
+          "match": "[(){}\\[\\]]"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.float.kratos", "match": "\\b\\d+\\.\\d+\\b" },
+        { "name": "constant.numeric.integer.kratos", "match": "\\b\\d+\\b" }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.kratos",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
+        },
+        {
+          "name": "variable.other.kratos",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}
