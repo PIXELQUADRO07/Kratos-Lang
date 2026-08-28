@@ -2,6 +2,7 @@
 #define KRATOS_PARSER_H
 
 #include "ast/ast.h"
+#include "diag/diag.h"
 #include "lexer/lexer.h"
 
 /*
@@ -22,12 +23,15 @@ typedef struct {
      * considerato valido se had_error e' 1.
      */
     int had_error;
+    const DiagContext *diag_context;
 } Parser;
 
 /*
  * Inizializza il parser e legge il primo token dal lexer.
  */
 void parser_init(Parser *parser, Lexer *lexer);
+
+void parser_init_with_context(Parser *parser, Lexer *lexer, const DiagContext *diag_context);
 
 /*
  * Analizza un intero programma (program = { declaration | function } ;) e

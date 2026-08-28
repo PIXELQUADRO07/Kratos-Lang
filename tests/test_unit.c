@@ -1,4 +1,5 @@
 #include "ast/ast.h"
+#include "diag/diag.h"
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 #include "runtime/interp.h"
@@ -49,6 +50,37 @@ static AstNode *parse_source(const char *source, int *had_error)
     return program;
 }
 
+static int diagnostics_contain(const char *source, int semantic)
+{
+    char output[4096];
+    FILE *stream = tmpfile();
+    if (stream == NULL) {
+        return 0;
+    }
+
+    DiagContext context;
+    diag_context_init(&context, "test.kratos", source);
+    diag_set_stream(stream);
+
+    Lexer lexer;
+    Parser parser;
+    lexer_init(&lexer, source);
+    parser_init_with_context(&parser, &lexer, &context);
+    AstNode *program = parser_parse_program(&parser);
+    if (semantic) {
+        semantic_analyze_with_context(program, NULL, &context);
+    }
+    ast_free(program);
+
+    fflush(stream);
+    rewind(stream);
+    size_t length = fread(output, 1, sizeof(output) - 1, stream);
+    output[length] = '\0';
+    fclose(stream);
+    diag_set_stream(NULL);
+    return strstr(output, "error[K") != NULL && strstr(output, "--> test.kratos:") != NULL;
+}
+
 
 int main(void)
 {
@@ -94,6 +126,12 @@ int main(void)
     AstNode *bad = parse_source("craft Test\n", &had_error);
     expect_true(had_error, "parser rejects bare craft");
     ast_free(bad);
+    expect_true(diagnostics_contain("craft Test\n", 0), "parser diagnostic rendering");
+
+    expect_true(
+        diagnostics_contain("k_void craft main() { shout(Missing); }\n", 1),
+        "semantic diagnostic rendering"
+    );
 
     AstNode *void_var = parse_source("k_void x = 1;\n", &had_error);
     expect_true(!had_error, "parser accepts k_void var syntactically");

@@ -1,5 +1,6 @@
 #include "semantic/semantic.h"
 
+#include "diag/diag.h"
 #include "parser/parser.h"
 #include "utils/file.h"
 
@@ -36,6 +37,7 @@ typedef struct {
     char **wield_stack;
     size_t wield_stack_count;
     size_t wield_stack_capacity;
+    const DiagContext *diag_context;
 } Analyzer;
 
 
@@ -50,7 +52,53 @@ static TypeInfo type_info(KratosType type, int is_array)
 
 static void semantic_error(Analyzer *analyzer, size_t line, const char *message)
 {
-    fprintf(stderr, "kratos: errore semantico alla riga %zu: %s\n", line, message);
+    int code = DIAG_K304;
+    if (strstr(message, "gia' dichiarato") != NULL) {
+        code = DIAG_K301;
+    } else if (strstr(message, "dichiarato") != NULL || strstr(message, "dichiarata") != NULL) {
+        code = DIAG_K302;
+    } else if (strstr(message, "craft") != NULL && strstr(message, "valore") != NULL) {
+        code = DIAG_K303;
+    } else if (strstr(message, "condizion") != NULL) {
+        code = DIAG_K305;
+    } else if (strstr(message, "snap/push") != NULL) {
+        code = DIAG_K306;
+    } else if (strstr(message, "yield") != NULL) {
+        code = DIAG_K307;
+    } else if (strstr(message, "wield") != NULL || strstr(message, "file di") != NULL) {
+        code = DIAG_K308;
+    } else if (strstr(message, "k_const") != NULL) {
+        code = DIAG_K309;
+    } else if (strstr(message, "ogni cammino") != NULL) {
+        code = DIAG_K310;
+    } else if (strstr(message, "k_void") != NULL) {
+        code = DIAG_K311;
+    } else if (strstr(message, "livello") != NULL) {
+        code = DIAG_K312;
+    } else if (strstr(message, "array") != NULL) {
+        code = DIAG_K313;
+    } else if (strstr(message, "craft inesistente") != NULL || strstr(message, "argomenti") != NULL || strstr(message, "chiamata") != NULL) {
+        code = DIAG_K314;
+    }
+    const char *display_message = message;
+    switch (code) {
+        case DIAG_K301: display_message = "name already declared in this scope"; break;
+        case DIAG_K302: display_message = "undeclared identifier"; break;
+        case DIAG_K303: display_message = "a craft is not a value"; break;
+        case DIAG_K304: display_message = "type mismatch"; break;
+        case DIAG_K305: display_message = "condition must be k_bool"; break;
+        case DIAG_K306: display_message = "snap and push are only valid inside a loop"; break;
+        case DIAG_K307: display_message = "invalid yield"; break;
+        case DIAG_K308: display_message = "wield error"; break;
+        case DIAG_K309: display_message = "cannot assign to k_const"; break;
+        case DIAG_K310: display_message = "craft must yield on every path"; break;
+        case DIAG_K311: display_message = "k_void cannot declare a variable or parameter"; break;
+        case DIAG_K312: display_message = "invalid construct at this level"; break;
+        case DIAG_K313: display_message = "nested arrays are not supported"; break;
+        case DIAG_K314: display_message = "invalid function call"; break;
+        default: break;
+    }
+    diag_emitf(analyzer->diag_context, DIAG_ERROR, code, line, 1, 1, NULL, "%s", display_message);
     analyzer->had_error = 1;
 }
 
@@ -711,8 +759,18 @@ static void expand_wields(Analyzer *analyzer, AstNode *program, const char *from
 
 int semantic_analyze(AstNode *program, const char *source_path)
 {
+    return semantic_analyze_with_context(program, source_path, NULL);
+}
+
+int semantic_analyze_with_context(
+    AstNode *program,
+    const char *source_path,
+    const DiagContext *diag_context
+)
+{
     Analyzer analyzer;
     memset(&analyzer, 0, sizeof(analyzer));
+    analyzer.diag_context = diag_context;
 
     char *resolved_source = NULL;
     if (source_path != NULL) {

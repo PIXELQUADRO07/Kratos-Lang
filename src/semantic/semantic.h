@@ -2,6 +2,7 @@
 #define KRATOS_SEMANTIC_H
 
 #include "ast/ast.h"
+#include "diag/diag.h"
 
 /*
  * Espande i `wield`, costruisce la tabella dei simboli e controlla i tipi.
@@ -12,5 +13,11 @@
  * (i nodi wield vengono sostituiti dalle dichiarazioni importate).
  */
 int semantic_analyze(AstNode *program, const char *source_path);
+
+int semantic_analyze_with_context(
+	AstNode *program,
+	const char *source_path,
+	const DiagContext *diag_context
+);
 
 #endif

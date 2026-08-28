@@ -43,25 +43,31 @@ static char token_to_char_value(Token token)
 
 /* --- Stato del parser --- */
 
-static void error_at(Parser *parser, Token token, const char *message);
+static void error_at(Parser *parser, Token token, int code, const char *message);
 
 static void advance_token(Parser *parser)
 {
     parser->previous = parser->current;
     parser->current = lexer_next_token(parser->lexer);
     if (parser->current.type == TOKEN_ERROR) {
-        error_at(parser, parser->current, "token non valido");
+        error_at(parser, parser->current, DIAG_K201, "invalid token");
     }
 }
 
 void parser_init(Parser *parser, Lexer *lexer)
 {
+    parser_init_with_context(parser, lexer, NULL);
+}
+
+void parser_init_with_context(Parser *parser, Lexer *lexer, const DiagContext *diag_context)
+{
     parser->lexer = lexer;
     parser->had_error = 0;
+    parser->diag_context = diag_context;
     parser->current = lexer_next_token(lexer);
     parser->previous = parser->current;
     if (parser->current.type == TOKEN_ERROR) {
-        error_at(parser, parser->current, "token non valido");
+        error_at(parser, parser->current, DIAG_K201, "invalid token");
     }
 }
 
@@ -83,16 +89,11 @@ static int match(Parser *parser, TokenType type)
     return 1;
 }
 
-static void error_at(Parser *parser, Token token, const char *message)
+static void error_at(Parser *parser, Token token, int code, const char *message)
 {
-    fprintf(
-        stderr,
-        "kratos: errore di sintassi alla riga %zu: %s (trovato '%.*s')\n",
-        token.line,
-        message,
-        (int)token.length,
-        token.start
-    );
+    diag_emitf(parser->diag_context, DIAG_ERROR, code, token.line, token.column,
+               token.length, NULL, "%s (found '%.*s')", message,
+               (int)token.length, token.start);
     parser->had_error = 1;
 }
 
@@ -112,7 +113,7 @@ static Token expect(Parser *parser, TokenType type, const char *message)
         return token;
     }
 
-    error_at(parser, parser->current, message);
+    error_at(parser, parser->current, DIAG_K202, message);
 
     Token bad_token = parser->current;
     if (!check(parser, TOKEN_EOF)) {
@@ -160,7 +161,8 @@ static KratosType token_to_kratos_type(TokenType type)
 static KratosType parse_type(Parser *parser)
 {
     if (!check_type_token(parser->current.type)) {
-        error_at(parser, parser->current, "atteso un tipo (k_int, k_float, k_bool, k_char, k_string o k_void)");
+        error_at(parser, parser->current, DIAG_K203,
+             "expected a type (k_int, k_float, k_bool, k_char, k_string or k_void)");
         KratosType fallback = KRATOS_TYPE_VOID;
         if (!check(parser, TOKEN_EOF)) {
             advance_token(parser);
@@ -229,13 +231,13 @@ static AstNode *parse_primary(Parser *parser)
                 ast_node_list_push(&array_node->as.array_literal.elements, parse_expression(parser));
             } while (match(parser, TOKEN_COMMA));
         }
-        expect(parser, TOKEN_RBRACKET, "atteso ']' dopo gli elementi dell'array");
+        expect(parser, TOKEN_RBRACKET, "expected ']' after array elements");
         return array_node;
     }
 
     if (match(parser, TOKEN_LPAREN)) {
         AstNode *inner = parse_expression(parser);
-        expect(parser, TOKEN_RPAREN, "atteso ')' dopo l'espressione");
+        expect(parser, TOKEN_RPAREN, "expected ')' after expression");
         return inner;
     }
 
@@ -255,7 +257,7 @@ static AstNode *parse_primary(Parser *parser)
                     ast_node_list_push(&node->as.call_expr.arguments, parse_expression(parser));
                 } while (match(parser, TOKEN_COMMA));
             }
-            expect(parser, TOKEN_RPAREN, "atteso ')' dopo gli argomenti della chiamata");
+            expect(parser, TOKEN_RPAREN, "expected ')' after call arguments");
         } else {
             node = ast_new_identifier_expr(line, name);
         }
@@ -265,14 +267,14 @@ static AstNode *parse_primary(Parser *parser)
         /* indicizzazione postfix: identifier[expr] o name(args)[expr] */
         while (match(parser, TOKEN_LBRACKET)) {
             AstNode *index = parse_expression(parser);
-            expect(parser, TOKEN_RBRACKET, "atteso ']' dopo l'indice");
+            expect(parser, TOKEN_RBRACKET, "expected ']' after index");
             node = ast_new_index_expr(line, node, index);
         }
 
         return node;
     }
 
-    error_at(parser, parser->current, "espressione attesa");
+    error_at(parser, parser->current, DIAG_K204, "expected an expression");
     if (!check(parser, TOKEN_EOF)) {
         advance_token(parser);
     }
@@ -421,7 +423,7 @@ static AstNode *parse_statement(Parser *parser);
 static AstNode *parse_block(Parser *parser)
 {
     size_t line = parser->current.line;
-    expect(parser, TOKEN_LBRACE, "atteso '{' per iniziare un blocco");
+    expect(parser, TOKEN_LBRACE, "expected '{' to start a block");
 
     AstNode *block = ast_new_block(line);
 
@@ -430,7 +432,7 @@ static AstNode *parse_block(Parser *parser)
         ast_node_list_push(&block->as.block.statements, stmt);
     }
 
-    expect(parser, TOKEN_RBRACE, "atteso '}' per chiudere il blocco");
+    expect(parser, TOKEN_RBRACE, "expected '}' to close the block");
     return block;
 }
 
@@ -447,16 +449,16 @@ static AstNode *parse_var_decl(Parser *parser)
 
     int is_array = 0;
     if (match(parser, TOKEN_LBRACKET)) {
-        expect(parser, TOKEN_RBRACKET, "atteso ']' dopo '[' nel tipo array");
+        expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
         is_array = 1;
     }
 
-    Token name_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome della variabile");
+    Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a variable name");
     char *name = token_to_cstring(name_token);
 
-    expect(parser, TOKEN_ASSIGN, "atteso '=' nella dichiarazione (Kratos richiede sempre un valore iniziale)");
+    expect(parser, TOKEN_ASSIGN, "expected '=' in declaration (Kratos requires an initializer)");
     AstNode *initializer = parse_expression(parser);
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo la dichiarazione");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after declaration");
 
     AstNode *node = ast_new_var_decl(line, is_const, is_array, type, name, initializer);
     free(name);
@@ -471,18 +473,18 @@ static AstNode *parse_if_stmt(Parser *parser)
 
     AstNode *node = ast_new_if_stmt(line);
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'if'");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'if'");
     AstNode *condition = parse_expression(parser);
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo la condizione");
+    expect(parser, TOKEN_RPAREN, "expected ')' after condition");
     AstNode *body = parse_block(parser);
     ast_node_list_push(&node->as.if_stmt.branches, ast_new_cond_branch(line, condition, body));
 
     while (check(parser, TOKEN_ELIF)) {
         size_t elif_line = parser->current.line;
         advance_token(parser);
-        expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'elif'");
+        expect(parser, TOKEN_LPAREN, "expected '(' after 'elif'");
         AstNode *elif_condition = parse_expression(parser);
-        expect(parser, TOKEN_RPAREN, "atteso ')' dopo la condizione");
+        expect(parser, TOKEN_RPAREN, "expected ')' after condition");
         AstNode *elif_body = parse_block(parser);
         ast_node_list_push(&node->as.if_stmt.branches, ast_new_cond_branch(elif_line, elif_condition, elif_body));
     }
@@ -500,9 +502,9 @@ static AstNode *parse_hold_stmt(Parser *parser)
     size_t line = parser->current.line;
     advance_token(parser); /* consuma "hold" */
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'hold'");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'hold'");
     AstNode *condition = parse_expression(parser);
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo la condizione");
+    expect(parser, TOKEN_RPAREN, "expected ')' after condition");
     AstNode *body = parse_block(parser);
 
     return ast_new_hold_stmt(line, condition, body);
@@ -516,11 +518,11 @@ static AstNode *parse_press_stmt(Parser *parser)
 
     AstNode *body = parse_block(parser);
 
-    expect(parser, TOKEN_HOLD, "atteso 'hold (condizione);' dopo il corpo di 'press'");
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'hold'");
+    expect(parser, TOKEN_HOLD, "expected 'hold (condition);' after 'press' body");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'hold'");
     AstNode *condition = parse_expression(parser);
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo la condizione");
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'hold (condizione)' di 'press'");
+    expect(parser, TOKEN_RPAREN, "expected ')' after condition");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after 'press' condition");
 
     return ast_new_press_stmt(line, body, condition);
 }
@@ -531,12 +533,12 @@ static AstNode *parse_drive_stmt(Parser *parser)
     size_t line = parser->current.line;
     advance_token(parser); /* consuma "drive" */
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'drive'");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'drive'");
     AstNode *init = parse_var_decl(parser); /* consuma gia' il ';' dell'inizializzatore */
     AstNode *condition = parse_expression(parser);
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo la condizione di 'drive'");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after 'drive' condition");
     AstNode *step = parse_assignment_or_expression(parser);
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo lo step di 'drive'");
+    expect(parser, TOKEN_RPAREN, "expected ')' after 'drive' step");
     AstNode *body = parse_block(parser);
 
     return ast_new_drive_stmt(line, init, condition, step, body);
@@ -548,17 +550,17 @@ static AstNode *parse_sweep_stmt(Parser *parser)
     size_t line = parser->current.line;
     advance_token(parser); /* consuma "sweep" */
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'sweep'");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'sweep'");
     KratosType element_type = parse_type(parser);
-    Token elem_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome dell'elemento in 'sweep'");
+    Token elem_token = expect(parser, TOKEN_IDENTIFIER, "expected the element name in 'sweep'");
     char *element_name = token_to_cstring(elem_token);
 
-    expect(parser, TOKEN_IN, "atteso 'in' in 'sweep (tipo nome in collezione)'");
+    expect(parser, TOKEN_IN, "expected 'in' in 'sweep (type name in collection)'");
 
-    Token coll_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome della collezione in 'sweep'");
+    Token coll_token = expect(parser, TOKEN_IDENTIFIER, "expected the collection name in 'sweep'");
     char *collection_name = token_to_cstring(coll_token);
 
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo la collezione di 'sweep'");
+    expect(parser, TOKEN_RPAREN, "expected ')' after 'sweep' collection");
     AstNode *body = parse_block(parser);
 
     AstNode *node = ast_new_sweep_stmt(line, element_type, element_name, collection_name, body);
@@ -577,7 +579,7 @@ static AstNode *parse_yield_stmt(Parser *parser)
     if (!check(parser, TOKEN_SEMICOLON)) {
         value = parse_expression(parser);
     }
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'yield'");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after 'yield'");
 
     return ast_new_yield_stmt(line, value);
 }
@@ -588,10 +590,10 @@ static AstNode *parse_shout_stmt(Parser *parser)
     size_t line = parser->current.line;
     advance_token(parser); /* consuma "shout" */
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo 'shout'");
+    expect(parser, TOKEN_LPAREN, "expected '(' after 'shout'");
     AstNode *value = parse_expression(parser);
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo l'espressione di 'shout'");
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'shout(...)'");
+    expect(parser, TOKEN_RPAREN, "expected ')' after 'shout' expression");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after 'shout(...)'");
 
     return ast_new_shout_stmt(line, value);
 }
@@ -602,9 +604,9 @@ static AstNode *parse_wield_stmt(Parser *parser)
     size_t line = parser->current.line;
     advance_token(parser); /* consuma "wield" */
 
-    Token path_token = expect(parser, TOKEN_STRING_LITERAL, "atteso il percorso tra virgolette dopo 'wield'");
+    Token path_token = expect(parser, TOKEN_STRING_LITERAL, "expected a quoted path after 'wield'");
     char *path = token_to_string_value(path_token);
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'wield \"percorso\"'");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after 'wield \"path\"'");
 
     AstNode *node = ast_new_wield_stmt(line, path);
     free(path);
@@ -616,7 +618,7 @@ static AstNode *parse_expression_statement(Parser *parser)
 {
     size_t line = parser->current.line;
     AstNode *result = parse_assignment_or_expression(parser);
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo l'istruzione");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after statement");
 
     if (result->kind == AST_ASSIGN) {
         return result;
@@ -654,14 +656,14 @@ static AstNode *parse_statement(Parser *parser)
         case TOKEN_SNAP: {
             size_t line = parser->current.line;
             advance_token(parser);
-            expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'snap'");
+            expect(parser, TOKEN_SEMICOLON, "expected ';' after 'snap'");
             return ast_new_snap_stmt(line);
         }
 
         case TOKEN_PUSH: {
             size_t line = parser->current.line;
             advance_token(parser);
-            expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo 'push'");
+            expect(parser, TOKEN_SEMICOLON, "expected ';' after 'push'");
             return ast_new_push_stmt(line);
         }
 
@@ -691,26 +693,26 @@ static AstNode *parse_function_decl(Parser *parser, KratosType return_type, size
 {
     advance_token(parser); /* consuma "craft" */
 
-    Token name_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome della funzione dopo 'craft'");
+    Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a function name after 'craft'");
     char *name = token_to_cstring(name_token);
 
     AstNode *func = ast_new_func_decl(line, return_type, name, NULL);
     free(name);
 
-    expect(parser, TOKEN_LPAREN, "atteso '(' dopo il nome della funzione");
+    expect(parser, TOKEN_LPAREN, "expected '(' after function name");
 
     if (!check(parser, TOKEN_RPAREN)) {
         do {
             size_t param_line = parser->current.line;
             KratosType param_type = parse_type(parser);
-            Token param_name_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome del parametro");
+            Token param_name_token = expect(parser, TOKEN_IDENTIFIER, "expected a parameter name");
             char *param_name = token_to_cstring(param_name_token);
             ast_node_list_push(&func->as.func_decl.params, ast_new_param(param_line, param_type, param_name));
             free(param_name);
         } while (match(parser, TOKEN_COMMA));
     }
 
-    expect(parser, TOKEN_RPAREN, "atteso ')' dopo i parametri");
+    expect(parser, TOKEN_RPAREN, "expected ')' after parameters");
 
     func->as.func_decl.body = parse_block(parser);
 
@@ -740,16 +742,16 @@ static AstNode *parse_top_level(Parser *parser)
 
     int is_array = 0;
     if (match(parser, TOKEN_LBRACKET)) {
-        expect(parser, TOKEN_RBRACKET, "atteso ']' dopo '[' nel tipo array");
+        expect(parser, TOKEN_RBRACKET, "expected ']' after '[' in array type");
         is_array = 1;
     }
 
-    Token name_token = expect(parser, TOKEN_IDENTIFIER, "atteso il nome della variabile o 'craft' per una funzione");
+    Token name_token = expect(parser, TOKEN_IDENTIFIER, "expected a variable name or 'craft' function");
     char *name = token_to_cstring(name_token);
 
-    expect(parser, TOKEN_ASSIGN, "atteso '=' nella dichiarazione (Kratos richiede sempre un valore iniziale)");
+    expect(parser, TOKEN_ASSIGN, "expected '=' in declaration (Kratos requires an initializer)");
     AstNode *initializer = parse_expression(parser);
-    expect(parser, TOKEN_SEMICOLON, "atteso ';' dopo la dichiarazione");
+    expect(parser, TOKEN_SEMICOLON, "expected ';' after declaration");
 
     AstNode *node = ast_new_var_decl(line, is_const, is_array, type, name, initializer);
     free(name);
