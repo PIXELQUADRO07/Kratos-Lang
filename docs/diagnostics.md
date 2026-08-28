@@ -14,6 +14,10 @@ error[K302]: undeclared variable 'Numero'
 
 `kratosc --check` prints `Kratos-Lang: no errors found` when analysis succeeds.
 
+Integer arithmetic overflow is not checked in 0.2.0 and has no K3xx code. It
+is outside the defined runtime behavior for this release; a future language
+version must choose a checked-overflow policy before promising portable results.
+
 ## Codes
 
 ### Lexer (K1xx)
@@ -53,3 +57,4 @@ error[K302]: undeclared variable 'Numero'
 | K312 | Invalid construct at this level |
 | K313 | Nested arrays |
 | K314 | Invalid call |
+| K315 | Record or field error (unknown field, duplicate field, missing field, type mismatch, self-referential record without array) |

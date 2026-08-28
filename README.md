@@ -13,8 +13,12 @@ source -> lexer -> parser/AST -> semantic analysis -> interpreter (or --emit-c)
 ```
 
 Lexer, parser, AST, type checking, a tree-walk interpreter, and a C backend
-are implemented. Automated tests cover the lexer, parser, semantic rules, and
-end-to-end example programs.
+are implemented. Implemented data features include nested arrays, indexed
+assignment, `len`, `slice`, scalar conversions (`to_string`, `to_int`,
+`to_float`), string concatenation, and **`record` composite types** with value
+semantics (member access, member mutation, nested records, arrays of records).
+Automated tests cover the lexer, parser, semantic rules, runtime edge cases,
+and end-to-end example programs.
 
 ## Quick Start
 
@@ -50,10 +54,10 @@ With no flags, `kratosc` parses the file, type-checks it, and runs it. If a
 
 Without a file, source is read from stdin.
 
-## Language version 0.2.0
+## Language version 0.3.0
 
 The grammar and keyword set documented in [the specification](docs/specification.md)
-are implemented as of 0.2.0. Breaking language changes require a version bump.
+are implemented as of 0.3.0. Breaking language changes require a version bump.
 
 To build without Make:
 
@@ -110,6 +114,18 @@ docs/                 Language notes and specification
 
 ```sh
 make test
+```
+
+Run the suite with AddressSanitizer and UndefinedBehaviorSanitizer:
+
+```sh
+make test-sanitize
+```
+
+CI runs the stricter portable C11 build with:
+
+```sh
+make test-strict
 ```
 
 This builds `kratosc`, runs the unit tests, executes example programs, and

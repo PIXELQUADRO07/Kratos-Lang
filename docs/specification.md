@@ -4,6 +4,43 @@ Version **0.2.0**. This document describes the language as implemented by
 `kratosc` in this repository. Behavior marked **Planned** is not required of
 0.2.0 implementations.
 
+## Records
+
+Records are a composite named type implemented since 0.3.0.
+
+```kratos
+record Point {
+    k_int x;
+    k_int y;
+}
+
+Point origin = Point { x: 0, y: 0 };
+k_void craft main() {
+    origin.x = 3;
+    shout(origin.y);
+}
+```
+
+The rules are:
+
+- A record declaration is **top-level** and introduces a named type.
+- Each field has one primitive or previously declared record type. Array fields
+  use the existing `[]` suffix.
+- A record literal must provide **every** field exactly once, using `field:
+  expression` entries. Field order inside the literal is arbitrary.
+- Field access uses `value.field`; field assignment follows the mutability of the
+  containing variable (`k_const` variables cannot have fields reassigned).
+- Records have **value semantics**: assignment, craft parameters, and yields
+  deep-copy the complete value.
+- Field names are scoped to their record type.
+- Duplicate fields in one record, unknown fields in a literal, missing fields in
+  a literal, and type mismatches are semantic errors — all reported as **K315**.
+- Direct self-reference (`record A { A self; }`) is rejected; self-referential
+  array fields (`A[]`) are allowed.
+- Nested records (`record Line { Point p1; Point p2; }`) and arrays of records
+  (`Point[] pts = [...];`) are supported.
+- The C code generator emits `typedef struct krec_Name krec_Name; struct krec_Name { ... };`.
+
 ## Versioning
 
 0.2.0 is the current numbered language snapshot. This grammar and keyword set
@@ -53,7 +90,7 @@ the AST.
 ```ebnf
 program       = { declaration | function | wield_stmt } ;
 
-declaration   = [ "k_const" ] type [ "[" "]" ] identifier "=" expression ";" ;
+declaration   = [ "k_const" ] type { "[" "]" } identifier "=" expression ";" ;
 type          = "k_int" | "k_float" | "k_bool" | "k_char" | "k_string" | "k_void" ;
 
 function      = return_type "craft" identifier "(" [ params ] ")" block ;
@@ -131,13 +168,22 @@ stops (it does not interpret or emit C).
 - `snap` / `push` require an enclosing loop.
 - Non-void crafts must `yield` on every path (`if` needs an `else` for this).
 - Array literals must have a uniform element type and depth matching the declaration.
+- Array types may be nested, for example `k_int[][]`; nested array literals must
+  have matching depth and uniform element types at each level.
+- `len(value)` accepts strings and arrays and returns `k_int`.
+- `slice(value, start, end)` accepts a string or one-dimensional array and
+  returns the half-open range `[start, end)`. Bounds must satisfy
+  `0 <= start <= end <= len(value)`; invalid bounds are runtime errors.
+- `to_string`, `to_int`, and `to_float` are scalar conversion built-ins. Invalid
+  string conversions are runtime errors.
 - `wield` loads another file; cycles are errors.
 
 ## Runtime
 
 `kratosc` evaluates global declarations in order, then calls `main` if it is
 declared. `shout` writes to stdout with a trailing newline. `&&` / `||`
-short-circuit.
+short-circuit. Array indexing validates negative and out-of-range indices in
+the interpreter and in the C backend before dereferencing.
 
 ## Conformance Requirements
 
