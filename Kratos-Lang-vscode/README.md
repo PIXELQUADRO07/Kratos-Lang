@@ -11,14 +11,16 @@ The extension provides:
 
 ## Local installation
 
-From the repository root:
+Package the extension directory with `vsce`, then install the generated
+package:
 
 ```sh
-code --install-extension Kratos-Lang-vscode
+vsce package Kratos-Lang-vscode
+code --install-extension kratos-lang-0.1.0.vsix
 ```
 
-Alternatively, package the directory with `vsce` and install the generated
-`.vsix` file.
+For development without packaging, use VS Code's extension development path
+support to launch the extension locally.
 
 The grammar follows the frozen syntax in
 [../docs/specification.md](../docs/specification.md). Language-server support
