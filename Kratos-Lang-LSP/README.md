@@ -11,6 +11,9 @@ Supported messages:
 - `textDocument/didOpen`;
 - `textDocument/didChange` with full document synchronization;
 - `textDocument/publishDiagnostics`.
+- `textDocument/completion` for the frozen keywords and built-ins;
+- `textDocument/hover` for keyword and type documentation;
+- `textDocument/definition` for local variable and function declarations.
 
 ## Run
 
@@ -27,6 +30,5 @@ Set `KRATOSC` when the compiler is elsewhere:
 KRATOSC=/path/to/kratosc python3 Kratos-Lang-LSP/server.py
 ```
 
-The server is intentionally limited to diagnostics for now. Completion,
-hover, definitions, references, rename, and signature help belong to later
-iterations backed by the reusable core library.
+References, rename, and signature help belong to later iterations backed by
+the reusable core library.
