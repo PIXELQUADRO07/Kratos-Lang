@@ -9,11 +9,24 @@ Function syntax is **Implemented**.
 | `shout` | `SHOUT` | Write a value to stdout |
 | `wield` | `WIELD` | Import another source file |
 
+## Built-ins
+
+| Function | Signature | Accepted values | Return type | Invalid input |
+| --- | --- | --- | --- | --- |
+| `len` | `len(value)` | `k_string`, any array | `k_int` | Semantic error K304; wrong arity is K314 |
+| `slice` | `slice(value, start, end)` | `k_string`, one-dimensional array; integer bounds | same type as `value` | Semantic error K304/K313; wrong arity is K314; invalid range is a runtime error |
+| `to_string` | `to_string(value)` | scalar values | `k_string` | Semantic error K304; wrong arity is K314; unsupported runtime conversion is a runtime error |
+| `to_int` | `to_int(value)` | `k_int`, `k_float`, `k_bool`, `k_char`, numeric `k_string` | `k_int` | Semantic error K304; wrong arity is K314; invalid string is a runtime error |
+| `to_float` | `to_float(value)` | `k_int`, `k_float`, `k_bool`, `k_char`, numeric `k_string` | `k_float` | Semantic error K304; wrong arity is K314; invalid string is a runtime error |
+| `shout` | `shout(value);` | printable scalar or array | statement | Semantic errors are reported during analysis |
+
 `len(value)` is a built-in expression returning a `k_int` for strings and
 arrays.
 
 `slice(value, start, end)` returns the range `[start, end)` for strings and
-one-dimensional arrays.
+one-dimensional arrays. `start` must be non-negative, `end` must be at least
+`start`, and `end` must not exceed the source length. Violations are runtime
+errors.
 
 `to_string`, `to_int`, and `to_float` convert scalar values explicitly.
 Numeric conversions also accept valid numeric strings.
@@ -53,6 +66,13 @@ declared return type. `yield;` is allowed only in `k_void` crafts.
 
 `shout(expression);` writes a textual representation followed by a newline.
 It is a statement, not a value.
+
+## I/O Scope
+
+Version 0.2.0 intentionally keeps I/O limited to `shout` on stdout. Reading
+from stdin or files is not part of the standard library yet; adding either
+operation requires an explicit error and resource-management policy for the
+interpreter and generated C backend.
 
 ## `wield`
 
