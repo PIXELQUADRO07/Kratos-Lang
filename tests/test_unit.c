@@ -50,7 +50,7 @@ static AstNode *parse_source(const char *source, int *had_error)
     return program;
 }
 
-static int diagnostics_contain(const char *source, int semantic)
+static int diagnostics_contain(const char *source, int semantic, const char *needle)
 {
     char output[4096];
     FILE *stream = tmpfile();
@@ -78,7 +78,9 @@ static int diagnostics_contain(const char *source, int semantic)
     output[length] = '\0';
     fclose(stream);
     diag_set_stream(NULL);
-    return strstr(output, "error[K") != NULL && strstr(output, "--> test.kratos:") != NULL;
+        return strstr(output, "error[K") != NULL &&
+            strstr(output, "--> test.kratos:") != NULL &&
+            strstr(output, needle) != NULL;
 }
 
 
@@ -132,11 +134,46 @@ int main(void)
     AstNode *bad = parse_source("craft Test\n", &had_error);
     expect_true(had_error, "parser rejects bare craft");
     ast_free(bad);
-    expect_true(diagnostics_contain("craft Test\n", 0), "parser diagnostic rendering");
+    expect_true(diagnostics_contain("craft Test\n", 0, "error[K"), "parser diagnostic rendering");
 
     expect_true(
-        diagnostics_contain("k_void craft main() { shout(Missing); }\n", 1),
+        diagnostics_contain("k_void craft main() { shout(Missing); }\n", 1, "undeclared identifier"),
         "semantic diagnostic rendering"
+    );
+
+    expect_true(
+        diagnostics_contain(
+            "k_int[] values = [1];\n"
+            "k_void craft main() { values[0] = true; }\n",
+            1,
+            "type mismatch"
+        ),
+        "semantic indexed assignment diagnostic"
+    );
+    expect_true(
+        diagnostics_contain(
+            "k_void craft main() { if (1) { shout(1); } }\n",
+            1,
+            "condition must be k_bool"
+        ),
+        "semantic condition diagnostic"
+    );
+    expect_true(
+        diagnostics_contain(
+            "k_const k_int value = 1;\n"
+            "k_void craft main() { value = 2; }\n",
+            1,
+            "cannot assign to k_const"
+        ),
+        "semantic const diagnostic"
+    );
+    expect_true(
+        diagnostics_contain(
+            "k_void craft main() { missing(1); }\n",
+            1,
+            "invalid function call"
+        ),
+        "semantic call diagnostic"
     );
 
     AstNode *void_var = parse_source("k_void x = 1;\n", &had_error);

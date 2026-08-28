@@ -55,6 +55,10 @@ test: $(TARGET) $(TEST_TARGET)
 	/tmp/kratosc_test | grep -q 'Hello, Kratos'
 	./$(TARGET) --emit-c examples/hello.kratos | $(CC) -std=c11 -x c - -o /tmp/kratos_hello_c
 	/tmp/kratos_hello_c | grep -q 'Hello, Kratos'
+	printf '%s\n' 'k_int[] values = [1, 2];' 'k_void craft main() { values[1] = 9; shout(values[1]); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_indexed_c
+	/tmp/kratos_indexed_c | grep -q '^9$$'
+	printf '%s\n' 'k_string left = "hello, ";' 'k_string right = "Kratos";' 'k_void craft main() { shout(left + right); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_concat_c
+	/tmp/kratos_concat_c | grep -q '^hello, Kratos$$'
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratosc_test
+	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratosc_test
