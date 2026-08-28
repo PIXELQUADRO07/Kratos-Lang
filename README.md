@@ -33,7 +33,8 @@ make
 CLI:
 
 ```text
-kratosc [--tokens | --ast | --emit-c] [file.kratos]
+kratosc [--tokens | --ast | --check | --emit-c] [-o <path>] [file.kratos]
+kratosc --version
 ```
 
 With no flags, `kratosc` parses the file, type-checks it, and runs it. If a
@@ -43,16 +44,23 @@ With no flags, `kratosc` parses the file, type-checks it, and runs it. If a
 ./kratosc --tokens examples/hello.kratos
 ./kratosc --ast examples/hello.kratos
 ./kratosc --emit-c examples/hello.kratos
+./kratosc --check examples/hello.kratos
+./kratosc --version
 ```
 
 Without a file, source is read from stdin.
+
+## Language freeze 0.1.0
+
+The grammar and keyword set documented in [the specification](docs/specification.md)
+are frozen for 0.1.0. Breaking language changes require a version bump.
 
 To build without Make:
 
 ```sh
 cc -std=c11 -Wall -Wextra -pedantic -Isrc \
 	src/main.c src/lexer/lexer.c src/parser/parser.c src/ast/ast.c \
-	src/utils/file.c src/semantic/semantic.c src/runtime/interp.c \
+	src/diag/diag.c src/utils/file.c src/semantic/semantic.c src/runtime/interp.c \
 	src/codegen/codegen.c -o kratosc
 ./kratosc examples/hello.kratos
 ```

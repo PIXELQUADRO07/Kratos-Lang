@@ -1,2 +1,3 @@
 kratosc
 tests/test_unit
+*.o
