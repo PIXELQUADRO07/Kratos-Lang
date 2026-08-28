@@ -19,7 +19,7 @@ TARGET = kratosc
 TEST_TARGET = tests/test_unit
 LIB_TARGET = libkratos.a
 
-.PHONY: all clean run test library
+.PHONY: all clean run test test-strict test-sanitize library
 
 all: $(TARGET) $(LIB_TARGET)
 
@@ -65,10 +65,25 @@ test: $(TARGET) $(TEST_TARGET)
 	/tmp/kratos_slice_c | grep -q '^rat$$'
 	printf '%s\n' 'k_int[] values = [1, 2, 3, 4];' 'k_void craft main() { shout(slice(values, 1, 3)); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_array_slice_c
 	/tmp/kratos_array_slice_c | grep -q '^\[2, 3\]$$'
+	printf '%s\n' 'k_int[] values = [1];' 'k_void craft main() { shout(values[-1]); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_bounds_c
+	! /tmp/kratos_bounds_c >/tmp/kratos_bounds_output 2>&1
+	grep -q 'array index out of bounds' /tmp/kratos_bounds_output
 	printf '%s\n' 'k_void craft main() { shout(to_string(42)); shout(to_int(3.9)); shout(to_float(2)); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_convert_c
 	/tmp/kratos_convert_c | grep -q '^42$$'
 	printf '%s\n' 'k_void craft main() { shout(to_int("42")); shout(to_float("3.5")); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_string_convert_c
 	/tmp/kratos_string_convert_c | grep -q '^42$$'
+	printf '%s\n' 'record Point { k_int x; k_int y; }' 'Point origin = Point { x: 10, y: 20 };' 'k_void craft main() { origin.x = 42; shout(origin.x); shout(origin.y); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_record_c
+	/tmp/kratos_record_c | grep -q '^42$$'
+	printf '%s\n' 'record Point { k_int x; k_int y; }' 'Point craft move_point(Point pt, k_int dx) { pt.x = pt.x + dx; yield pt; }' 'k_void craft main() { Point a = Point { x: 5, y: 10 }; Point b = move_point(a, 3); shout(a.x); shout(b.x); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_record_val_c
+	/tmp/kratos_record_val_c | grep -q '^5$$'
+
+test-sanitize:
+	$(MAKE) clean
+	$(MAKE) CC=$$(command -v clang >/dev/null 2>&1 && echo clang || echo $(CC)) CFLAGS='-std=c11 -Wall -Wextra -pedantic -fsanitize=address,undefined -g' test
+
+test-strict:
+	$(MAKE) clean
+	$(MAKE) CFLAGS='-std=c11 -Wall -Wextra -pedantic-errors' test
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratos_slice_c /tmp/kratos_array_slice_c /tmp/kratos_convert_c /tmp/kratos_string_convert_c /tmp/kratosc_test
+	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratos_slice_c /tmp/kratos_array_slice_c /tmp/kratos_bounds_c /tmp/kratos_bounds_output /tmp/kratos_convert_c /tmp/kratos_string_convert_c /tmp/kratos_record_c /tmp/kratos_record_val_c /tmp/kratosc_test
