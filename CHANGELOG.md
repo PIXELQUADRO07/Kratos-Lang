@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-08-28
+
+- Add indexed array assignment.
+- Add `len()` for strings and arrays.
+- Add string concatenation with `+`.
+- Add extended numeric literals and regression coverage for diagnostics and C output.
+
 ## 0.1.0 - 2026-08-28
 
 - Freeze the implemented Kratos language syntax and grammar.

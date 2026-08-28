@@ -59,7 +59,7 @@ into the program. Cyclic imports are errors. There is no `as alias` form.
 `add(1, 2)`. Functions are not stored in variables. There is no overloading
 and no default parameter values.
 
-## Open Design Decisions (not in 0.1.0)
+## Open Design Decisions (not in 0.2.0)
 
 - first-class functions;
 - `wield` aliases and package names;

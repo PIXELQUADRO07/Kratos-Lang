@@ -183,15 +183,21 @@ static void emit_expr(Emitter *e, const AstNode *node)
             break;
 
         case AST_ARRAY_LITERAL: {
-            int id = e->temp++;
-            fprintf(e->out, "({ KArr _a%d; _a%d.count = %zu; _a%d.items = calloc(%zu, sizeof(int64_t)); ",
-                    id, id, node->as.array_literal.elements.count, id, node->as.array_literal.elements.count);
-            for (size_t i = 0; i < node->as.array_literal.elements.count; i++) {
-                fprintf(e->out, "((int64_t *)_a%d.items)[%zu] = (int64_t)(", id, i);
-                emit_expr(e, node->as.array_literal.elements.items[i]);
-                fputs("); ", e->out);
+            size_t count = node->as.array_literal.elements.count;
+            if (count == 0) {
+                fputs("k_arr_from_values(NULL, 0)", e->out);
+                break;
             }
-            fprintf(e->out, "_a%d; })", id);
+            fprintf(e->out, "k_arr_from_values((int64_t[]){");
+            for (size_t i = 0; i < count; i++) {
+                if (i > 0) {
+                    fputs(", ", e->out);
+                }
+                fputs("(int64_t)(", e->out);
+                emit_expr(e, node->as.array_literal.elements.items[i]);
+                fputc(')', e->out);
+            }
+            fprintf(e->out, "}, %zu)", count);
             break;
         }
 
@@ -416,6 +422,14 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "#include <stdlib.h>\n"
         "#include <string.h>\n\n"
         "typedef struct { void *items; size_t count; } KArr;\n\n"
+        "KArr k_arr_from_values(const int64_t *values, size_t count) {\n"
+        "    KArr result;\n"
+        "    result.count = count;\n"
+        "    result.items = count == 0 ? NULL : calloc(count, sizeof(int64_t));\n"
+        "    if (count > 0 && result.items == NULL) exit(EXIT_FAILURE);\n"
+        "    if (count > 0) memcpy(result.items, values, count * sizeof(int64_t));\n"
+        "    return result;\n"
+        "}\n\n"
         "#define k_shout(v) _Generic((v), \\\n"
         "    int64_t: k_shout_int, \\\n"
         "    int: k_shout_int32, \\\n"
@@ -439,7 +453,7 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "    }\n"
         "    printf(\"]\\n\");\n"
         "}\n"
-        "static const char *k_concat(const char *left, const char *right) {\n"
+        "const char *k_concat(const char *left, const char *right) {\n"
         "    size_t left_len = strlen(left ? left : \"\");\n"
         "    size_t right_len = strlen(right ? right : \"\");\n"
         "    char *result = malloc(left_len + right_len + 1);\n"
@@ -448,14 +462,14 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "    memcpy(result + left_len, right ? right : \"\", right_len + 1);\n"
         "    return result;\n"
         "}\n"
-        "static double k_plus_numeric(double left, double right) { return left + right; }\n"
+        "double k_plus_numeric(double left, double right) { return left + right; }\n"
         "#define k_plus(left, right) _Generic((left), \\\n"
         "    char *: k_concat, \\\n"
         "    const char *: k_concat, \\\n"
         "    default: k_plus_numeric \\\n"
         ")(left, right)\n"
-        "static int64_t k_len_string(const char *v) { return (int64_t)strlen(v ? v : \"\"); }\n"
-        "static int64_t k_len_array(KArr v) { return (int64_t)v.count; }\n"
+        "int64_t k_len_string(const char *v) { return (int64_t)strlen(v ? v : \"\"); }\n"
+        "int64_t k_len_array(KArr v) { return (int64_t)v.count; }\n"
         "#define k_len(v) _Generic((v), \\\n"
         "    KArr: k_len_array, \\\n"
         "    char *: k_len_string, \\\n"

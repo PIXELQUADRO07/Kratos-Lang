@@ -50,10 +50,10 @@ With no flags, `kratosc` parses the file, type-checks it, and runs it. If a
 
 Without a file, source is read from stdin.
 
-## Language freeze 0.1.0
+## Language version 0.2.0
 
 The grammar and keyword set documented in [the specification](docs/specification.md)
-are frozen for 0.1.0. Breaking language changes require a version bump.
+are implemented as of 0.2.0. Breaking language changes require a version bump.
 
 To build without Make:
 
@@ -125,7 +125,7 @@ Completed in this tree:
 4. Control flow, functions, arrays, `sweep`, and `wield`.
 5. Interpreter and a C code generation target.
 6. Unit, integration, and end-to-end tests.
-7. Specification labeled **Kratos 0.1.0**.
+7. Specification and release tracking for **Kratos 0.2.0**.
 
 Possible later work: a bytecode VM, richer collections, and module aliases.
 

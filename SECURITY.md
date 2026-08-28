@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-Kratos Lang 0.1.0 is experimental and does not offer formal security support.
+Kratos Lang 0.2.0 is experimental and does not offer formal security support.
 If you find a security issue, please open a private report through the
 repository's GitHub security advisory flow when available. Do not include
 sensitive exploit details in a public issue.

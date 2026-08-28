@@ -1,21 +1,21 @@
 # Kratos Lang Specification
 
-Version **0.1.0**. This document describes the language as implemented by
+Version **0.2.0**. This document describes the language as implemented by
 `kratosc` in this repository. Behavior marked **Planned** is not required of
-0.1.0 implementations.
+0.2.0 implementations.
 
 ## Versioning
 
-0.1.0 is the first numbered language snapshot. This grammar and keyword set
+0.2.0 is the current numbered language snapshot. This grammar and keyword set
 are **frozen**: later versions may extend the language, but breaking changes
 must bump the version (minor or major once 1.0.0 exists).
 
 Implemented behavior is defined by the compiler sources, the tests in
 `tests/` and `examples/`, and this specification.
 
-## Language freeze 0.1.0
+## Language version 0.2.0
 
-The following spellings are part of 0.1.0 and must not change without a
+The following spellings are part of 0.2.0 and must not change without a
 version bump:
 
 - types: `k_int`, `k_float`, `k_bool`, `k_char`, `k_string`, `k_const`, `k_void`;
@@ -141,5 +141,5 @@ short-circuit.
 
 ## Conformance Requirements
 
-An implementation of 0.1.0 should match this grammar, the semantic rules
+An implementation of 0.2.0 should match this grammar, the semantic rules
 above, and the tests invoked by `make test`.

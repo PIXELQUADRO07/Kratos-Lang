@@ -8,7 +8,7 @@ tests, and docs aligned are especially useful.
 Read the [README](README.md) and the relevant page in `docs/`. Check whether a
 feature is marked `Implemented`, `Partial`, or `Planned` before changing its
 behavior. Keep the implementation and documentation status aligned. The current
-language snapshot is **0.1.0**.
+language snapshot is **0.2.0**.
 
 ## Development Workflow
 
@@ -58,5 +58,5 @@ user-visible behavior, list validation commands, and call out known limitations.
 ## Design Changes
 
 For a change that affects the grammar, type system, runtime model, or keyword
-meanings, document the proposal in `docs/` and show how it fits version 0.1.0
+meanings, document the proposal in `docs/` and show how it fits version 0.2.0
 or a later snapshot.

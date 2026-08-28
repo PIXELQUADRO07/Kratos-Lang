@@ -1,6 +1,6 @@
 # Diagnostics
 
-Kratos 0.1.0 reports problems in a rustc-style form:
+Kratos 0.2.0 reports problems in a rustc-style form:
 
 ```text
 error[K302]: undeclared variable 'Numero'

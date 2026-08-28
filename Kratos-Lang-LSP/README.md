@@ -1,7 +1,7 @@
 # Kratos-Lang LSP
 
 This directory contains the first minimal Language Server Protocol adapter for
-Kratos-Lang 0.1.0. It has no third-party dependencies and delegates parsing,
+Kratos-Lang 0.2.0. It has no third-party dependencies and delegates parsing,
 semantic analysis, and diagnostic rendering to the repository's `kratosc`
 executable.
 

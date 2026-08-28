@@ -25,8 +25,8 @@ and at least one decimal digit:
 3.14    FLOAT
 ```
 
-Forms such as `.5`, `10.`, signs, exponents, and digit separators are
-**Planned**.
+Leading and trailing decimal points, signs, exponents, and digit separators
+are **Implemented**: `.5`, `10.`, `-2.5`, `1e3`, and `1_000`.
 
 ## Boolean Literals
 
