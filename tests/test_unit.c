@@ -274,6 +274,15 @@ int main(void)
     expect_true(interp_run(array_slice) == 0, "interp array slice");
     ast_free(array_slice);
 
+    AstNode *converted = parse_source(
+        "k_void craft main() { shout(to_string(42)); shout(to_int(3.9)); shout(to_float(2)); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser scalar conversions");
+    expect_true(semantic_analyze(converted, NULL) == 0, "semantic scalar conversions");
+    expect_true(interp_run(converted) == 0, "interp scalar conversions");
+    ast_free(converted);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

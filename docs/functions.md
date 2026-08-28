@@ -15,6 +15,8 @@ arrays.
 `slice(value, start, end)` returns the range `[start, end)` for strings and
 one-dimensional arrays.
 
+`to_string`, `to_int`, and `to_float` convert scalar values explicitly.
+
 String concatenation uses `+`, for example `"hello, " + name`.
 
 ## Function Declaration

@@ -196,6 +196,12 @@ static void emit_expr(Emitter *e, const AstNode *node)
                 fputs("k_len(", e->out);
             } else if (strcmp(node->as.call_expr.callee, "slice") == 0) {
                 fputs("k_slice(", e->out);
+            } else if (strcmp(node->as.call_expr.callee, "to_string") == 0) {
+                fputs("k_to_string(", e->out);
+            } else if (strcmp(node->as.call_expr.callee, "to_int") == 0) {
+                fputs("k_to_int(", e->out);
+            } else if (strcmp(node->as.call_expr.callee, "to_float") == 0) {
+                fputs("k_to_float(", e->out);
             } else {
                 fprintf(e->out, "kfn_%s(", node->as.call_expr.callee);
             }
@@ -534,7 +540,26 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "    KArr: k_slice_array, \\\n"
         "    char *: k_slice_string, \\\n"
         "    const char *: k_slice_string \\\n"
-        ")(source, start, end)\n"
+        ")(source, start, end)\n",
+        out
+    );
+    fputs(
+        "const char *k_to_string_int64(int64_t value) { static char text[64]; snprintf(text, sizeof(text), \"%lld\", (long long)value); return text; }\n"
+        "const char *k_to_string_int(int value) { static char text[64]; snprintf(text, sizeof(text), \"%d\", value); return text; }\n"
+        "const char *k_to_string_float(double value) { static char text[64]; snprintf(text, sizeof(text), \"%g\", value); return text; }\n"
+        "const char *k_to_string_char(char value) { static char text[2]; text[0] = value; text[1] = '\\0'; return text; }\n"
+        "const char *k_to_string_string(const char *value) { return value ? value : \"\"; }\n"
+        "#define k_to_string(value) _Generic((value), \\\n"
+        "    char *: k_to_string_string, const char *: k_to_string_string, char: k_to_string_char, \\\n"
+        "    default: k_to_string_float \\\n"
+        ")(value)\n"
+        "int64_t k_to_int_int64(int64_t value) { return value; }\n"
+        "int64_t k_to_int_float(double value) { return (int64_t)value; }\n"
+        "int64_t k_to_int_int(int value) { return (int64_t)value; }\n"
+        "int64_t k_to_int_char(char value) { return (int64_t)value; }\n"
+        "#define k_to_int(value) k_to_int_float(value)\n"
+        "double k_to_float_float(double value) { return value; }\n"
+        "#define k_to_float(value) k_to_float_float(value)\n"
         "double k_plus_numeric(double left, double right) { return left + right; }\n"
         "#define k_plus(left, right) _Generic((left), \\\n"
         "    char *: k_concat, \\\n"

@@ -65,6 +65,8 @@ test: $(TARGET) $(TEST_TARGET)
 	/tmp/kratos_slice_c | grep -q '^rat$$'
 	printf '%s\n' 'k_int[] values = [1, 2, 3, 4];' 'k_void craft main() { shout(slice(values, 1, 3)); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_array_slice_c
 	/tmp/kratos_array_slice_c | grep -q '^\[2, 3\]$$'
+	printf '%s\n' 'k_void craft main() { shout(to_string(42)); shout(to_int(3.9)); shout(to_float(2)); }' | ./$(TARGET) --emit-c | $(CC) -std=c11 -x c - -o /tmp/kratos_convert_c
+	/tmp/kratos_convert_c | grep -q '^42$$'
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratos_slice_c /tmp/kratos_array_slice_c /tmp/kratosc_test
+	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratos_indexed_c /tmp/kratos_concat_c /tmp/kratos_nested_c /tmp/kratos_slice_c /tmp/kratos_array_slice_c /tmp/kratos_convert_c /tmp/kratosc_test

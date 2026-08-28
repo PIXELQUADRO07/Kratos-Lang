@@ -664,6 +664,54 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 value_free(end);
                 return result;
             }
+            if (strcmp(node->as.call_expr.callee, "to_string") == 0 ||
+                strcmp(node->as.call_expr.callee, "to_int") == 0 ||
+                strcmp(node->as.call_expr.callee, "to_float") == 0) {
+                if (node->as.call_expr.arguments.count != 1) {
+                    runtime_error(interp, node->line, "la conversione richiede un argomento");
+                    return val_void();
+                }
+                Value argument = eval_expr(interp, node->as.call_expr.arguments.items[0]);
+                char buffer[64];
+                Value result = val_void();
+                if (strcmp(node->as.call_expr.callee, "to_string") == 0) {
+                    if (argument.kind == VAL_STRING) {
+                        result.kind = VAL_STRING;
+                        result.as.s = kratos_copy_string(argument.as.s != NULL ? argument.as.s : "");
+                    } else if (argument.kind == VAL_INT) {
+                        snprintf(buffer, sizeof(buffer), "%lld", (long long)argument.as.i);
+                    } else if (argument.kind == VAL_FLOAT) {
+                        snprintf(buffer, sizeof(buffer), "%g", argument.as.f);
+                    } else if (argument.kind == VAL_BOOL) {
+                        snprintf(buffer, sizeof(buffer), "%s", argument.as.b ? "true" : "false");
+                    } else if (argument.kind == VAL_CHAR) {
+                        snprintf(buffer, sizeof(buffer), "%c", argument.as.c);
+                    } else {
+                        runtime_error(interp, node->line, "tipo non convertibile in k_string");
+                    }
+                    if (result.kind != VAL_STRING && !interp->had_error) {
+                        result.kind = VAL_STRING;
+                        result.as.s = kratos_copy_string(buffer);
+                    }
+                } else if (argument.kind == VAL_INT || argument.kind == VAL_BOOL || argument.kind == VAL_CHAR) {
+                    if (strcmp(node->as.call_expr.callee, "to_int") == 0) {
+                        result = val_int(argument.kind == VAL_INT ? argument.as.i :
+                            argument.kind == VAL_BOOL ? argument.as.b : argument.as.c);
+                    } else {
+                        result = val_float(argument.kind == VAL_INT ? (double)argument.as.i :
+                            argument.kind == VAL_BOOL ? (double)argument.as.b : (double)argument.as.c);
+                    }
+                } else if (argument.kind == VAL_FLOAT && strcmp(node->as.call_expr.callee, "to_int") == 0) {
+                    result = val_int((int64_t)argument.as.f);
+                } else if (argument.kind == VAL_FLOAT) {
+                    result = argument;
+                    argument.kind = VAL_VOID;
+                } else {
+                    runtime_error(interp, node->line, "tipo non convertibile");
+                }
+                value_free(argument);
+                return result;
+            }
             AstNode *func = find_function(interp, node->as.call_expr.callee);
             if (func == NULL) {
                 runtime_error(interp, node->line, "craft non trovata");

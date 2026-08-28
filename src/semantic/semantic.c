@@ -365,6 +365,27 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 }
                 return source.is_array == 1 ? type_info(source.type, 1) : type_info(KRATOS_TYPE_STRING, 0);
             }
+            if (strcmp(node->as.call_expr.callee, "to_string") == 0 ||
+                strcmp(node->as.call_expr.callee, "to_int") == 0 ||
+                strcmp(node->as.call_expr.callee, "to_float") == 0) {
+                if (node->as.call_expr.arguments.count != 1) {
+                    semantic_error(analyzer, node->line, "la conversione richiede un argomento");
+                    return invalid;
+                }
+                TypeInfo argument = check_expr(analyzer, node->as.call_expr.arguments.items[0]);
+                if (argument.is_array || argument.type == KRATOS_TYPE_VOID) {
+                    semantic_error(analyzer, node->line, "la conversione richiede un valore scalare");
+                }
+                if (strcmp(node->as.call_expr.callee, "to_string") == 0) {
+                    return type_info(KRATOS_TYPE_STRING, 0);
+                }
+                if (argument.type != KRATOS_TYPE_INT && argument.type != KRATOS_TYPE_FLOAT &&
+                    argument.type != KRATOS_TYPE_BOOL && argument.type != KRATOS_TYPE_CHAR) {
+                    semantic_error(analyzer, node->line, "tipo non convertibile");
+                }
+                return strcmp(node->as.call_expr.callee, "to_int") == 0
+                    ? type_info(KRATOS_TYPE_INT, 0) : type_info(KRATOS_TYPE_FLOAT, 0);
+            }
             Symbol *symbol = scope_find(analyzer->scope, node->as.call_expr.callee);
             if (symbol == NULL || !symbol->is_function || symbol->func == NULL) {
                 semantic_error(analyzer, node->line, "chiamata a una craft inesistente");
