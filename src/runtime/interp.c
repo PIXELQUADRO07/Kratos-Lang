@@ -521,6 +521,23 @@ static Value eval_expr(Interp *interp, AstNode *node)
         }
 
         case AST_CALL_EXPR: {
+            if (strcmp(node->as.call_expr.callee, "len") == 0) {
+                if (node->as.call_expr.arguments.count != 1) {
+                    runtime_error(interp, node->line, "len richiede un argomento");
+                    return val_void();
+                }
+                Value argument = eval_expr(interp, node->as.call_expr.arguments.items[0]);
+                Value result = val_void();
+                if (argument.kind == VAL_STRING) {
+                    result = val_int((int64_t)strlen(argument.as.s != NULL ? argument.as.s : ""));
+                } else if (argument.kind == VAL_ARRAY) {
+                    result = val_int((int64_t)argument.as.array.count);
+                } else {
+                    runtime_error(interp, node->line, "len richiede una stringa o un array");
+                }
+                value_free(argument);
+                return result;
+            }
             AstNode *func = find_function(interp, node->as.call_expr.callee);
             if (func == NULL) {
                 runtime_error(interp, node->line, "craft non trovata");

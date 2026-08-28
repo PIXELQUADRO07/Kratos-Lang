@@ -166,6 +166,17 @@ int main(void)
     expect_true(interp_run(indexed) == 0, "interp indexed assignment");
     ast_free(indexed);
 
+    AstNode *lengths = parse_source(
+        "k_string text = \"hello\";\n"
+        "k_int[] values = [1, 2, 3];\n"
+        "k_void craft main() { shout(len(text)); shout(len(values)); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser len builtin");
+    expect_true(semantic_analyze(lengths, NULL) == 0, "semantic len builtin");
+    expect_true(interp_run(lengths) == 0, "interp len builtin");
+    ast_free(lengths);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

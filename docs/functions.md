@@ -9,6 +9,9 @@ Function syntax is **Implemented**.
 | `shout` | `SHOUT` | Write a value to stdout |
 | `wield` | `WIELD` | Import another source file |
 
+`len(value)` is a built-in expression returning a `k_int` for strings and
+arrays.
+
 ## Function Declaration
 
 The return type comes first, followed by `craft`, the function name, and a

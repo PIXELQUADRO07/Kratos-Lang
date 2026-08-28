@@ -332,6 +332,17 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
         }
 
         case AST_CALL_EXPR: {
+            if (strcmp(node->as.call_expr.callee, "len") == 0) {
+                if (node->as.call_expr.arguments.count != 1) {
+                    semantic_error(analyzer, node->line, "len richiede un argomento");
+                    return invalid;
+                }
+                TypeInfo argument = check_expr(analyzer, node->as.call_expr.arguments.items[0]);
+                if (!argument.is_array && argument.type != KRATOS_TYPE_STRING) {
+                    semantic_error(analyzer, node->line, "len richiede una stringa o un array");
+                }
+                return type_info(KRATOS_TYPE_INT, 0);
+            }
             Symbol *symbol = scope_find(analyzer->scope, node->as.call_expr.callee);
             if (symbol == NULL || !symbol->is_function || symbol->func == NULL) {
                 semantic_error(analyzer, node->line, "chiamata a una craft inesistente");

@@ -152,7 +152,11 @@ static void emit_expr(Emitter *e, const AstNode *node)
             break;
 
         case AST_CALL_EXPR:
-            fprintf(e->out, "kfn_%s(", node->as.call_expr.callee);
+            if (strcmp(node->as.call_expr.callee, "len") == 0) {
+                fputs("k_len(", e->out);
+            } else {
+                fprintf(e->out, "kfn_%s(", node->as.call_expr.callee);
+            }
             for (size_t i = 0; i < node->as.call_expr.arguments.count; i++) {
                 if (i > 0) {
                     fputs(", ", e->out);
@@ -426,7 +430,14 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "        printf(\"%lld\", (long long)((int64_t *)v.items)[i]);\n"
         "    }\n"
         "    printf(\"]\\n\");\n"
-        "}\n\n",
+        "}\n"
+        "static int64_t k_len_string(const char *v) { return (int64_t)strlen(v ? v : \"\"); }\n"
+        "static int64_t k_len_array(KArr v) { return (int64_t)v.count; }\n"
+        "#define k_len(v) _Generic((v), \\\n"
+        "    KArr: k_len_array, \\\n"
+        "    char *: k_len_string, \\\n"
+        "    const char *: k_len_string \\\n"
+        ")(v)\n\n",
         out
     );
 

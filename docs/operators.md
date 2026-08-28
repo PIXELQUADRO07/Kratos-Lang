@@ -10,7 +10,7 @@ to `k_float`. Assigning `k_int` to `k_float` is allowed; the reverse is not.
 | --- | --- | --- |
 | `=` | `ASSIGN` | Assign to a non-`k_const` identifier |
 
-Indexed assignment (`Lista[0] = 1`) is **Planned**.
+Indexed assignment (`Lista[0] = 1`) is **Implemented**.
 
 ## Arithmetic and Comparison
 
