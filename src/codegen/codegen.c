@@ -21,8 +21,16 @@ static void emit_indent(Emitter *e)
 }
 
 
-static void emit_c_type(FILE *out, KratosType type, int is_array)
+static void emit_c_type(FILE *out, KratosType type, int is_array, const char *record_name)
 {
+    if (is_array) {
+        fprintf(out, "KArr");
+        return;
+    }
+    if (type == KRATOS_TYPE_RECORD && record_name != NULL) {
+        fprintf(out, "krec_%s", record_name);
+        return;
+    }
     const char *base = "int64_t";
     switch (type) {
         case KRATOS_TYPE_INT:    base = "int64_t"; break;
@@ -31,11 +39,7 @@ static void emit_c_type(FILE *out, KratosType type, int is_array)
         case KRATOS_TYPE_CHAR:   base = "char"; break;
         case KRATOS_TYPE_STRING: base = "const char *"; break;
         case KRATOS_TYPE_VOID:   base = "void"; break;
-    }
-
-    if (is_array) {
-        fprintf(out, "KArr");
-        return;
+        case KRATOS_TYPE_RECORD: base = "void *"; break;
     }
     fputs(base, out);
 }
@@ -215,15 +219,21 @@ static void emit_expr(Emitter *e, const AstNode *node)
             break;
 
         case AST_INDEX_EXPR:
+            fputs("(*(", e->out);
             if (array_depth(e, node->as.index_expr.array) > 1) {
-                fputs("(((KArr *)((", e->out);
+                fputs("KArr *)k_arr_index(", e->out);
             } else {
-                fputs("(((int64_t *)((", e->out);
+                fputs("int64_t *)k_arr_index(", e->out);
             }
             emit_expr(e, node->as.index_expr.array);
-            fputs(").items))[", e->out);
+            fputs(", ", e->out);
             emit_expr(e, node->as.index_expr.index);
-            fputs("])", e->out);
+            if (array_depth(e, node->as.index_expr.array) > 1) {
+                fputs(", sizeof(KArr))", e->out);
+            } else {
+                fputs(", sizeof(int64_t))", e->out);
+            }
+            fputs(")", e->out);
             break;
 
         case AST_ARRAY_LITERAL: {
@@ -249,6 +259,26 @@ static void emit_expr(Emitter *e, const AstNode *node)
             fprintf(e->out, "}, %zu)", count);
             break;
         }
+
+        case AST_RECORD_LITERAL: {
+            fprintf(e->out, "(krec_%s){", node->as.record_literal.name);
+            for (size_t i = 0; i < node->as.record_literal.fields.count; i++) {
+                if (i > 0) {
+                    fputs(", ", e->out);
+                }
+                AstNode *fi = node->as.record_literal.fields.items[i];
+                fprintf(e->out, ".%s = ", fi->as.field_init.name);
+                emit_expr(e, fi->as.field_init.value);
+            }
+            fputs("}", e->out);
+            break;
+        }
+
+        case AST_MEMBER_EXPR:
+            fputc('(', e->out);
+            emit_expr(e, node->as.member_expr.target);
+            fprintf(e->out, ").%s", node->as.member_expr.member);
+            break;
 
         default:
             fputs("0", e->out);
@@ -276,9 +306,13 @@ static void emit_stmt(Emitter *e, const AstNode *node)
     }
 
     switch (node->kind) {
+        case AST_RECORD_DECL:
+            /* Struct definitions are emitted globally before functions. */
+            break;
+
         case AST_VAR_DECL:
             emit_indent(e);
-            emit_c_type(e->out, node->as.var_decl.type, node->as.var_decl.is_array);
+            emit_c_type(e->out, node->as.var_decl.type, node->as.var_decl.is_array, node->as.var_decl.record_name);
             fprintf(e->out, " %s = ", node->as.var_decl.name);
             emit_expr(e, node->as.var_decl.initializer);
             fputs(";\n", e->out);
@@ -371,7 +405,7 @@ static void emit_stmt(Emitter *e, const AstNode *node)
             fprintf(e->out, "for (size_t _i = 0; _i < %s.count; _i++) {\n", node->as.sweep_stmt.collection_name);
             e->indent++;
             emit_indent(e);
-            emit_c_type(e->out, node->as.sweep_stmt.element_type, 0);
+            emit_c_type(e->out, node->as.sweep_stmt.element_type, 0, node->as.sweep_stmt.element_record_name);
             fprintf(e->out, " %s = ((int64_t *)%s.items)[_i];\n",
                     node->as.sweep_stmt.element_name,
                     node->as.sweep_stmt.collection_name);
@@ -435,7 +469,7 @@ static void emit_stmt(Emitter *e, const AstNode *node)
 static void emit_function(Emitter *e, const AstNode *func)
 {
     e->function = func;
-    emit_c_type(e->out, func->as.func_decl.return_type, 0);
+    emit_c_type(e->out, func->as.func_decl.return_type, 0, func->as.func_decl.return_record_name);
     fprintf(e->out, " kfn_%s(", func->as.func_decl.name);
     if (func->as.func_decl.params.count == 0) {
         fputs("void", e->out);
@@ -445,7 +479,7 @@ static void emit_function(Emitter *e, const AstNode *func)
                 fputs(", ", e->out);
             }
             AstNode *param = func->as.func_decl.params.items[i];
-            emit_c_type(e->out, param->as.param.type, 0);
+            emit_c_type(e->out, param->as.param.type, param->as.param.is_array, param->as.param.record_name);
             fprintf(e->out, " %s", param->as.param.name);
         }
     }
@@ -473,7 +507,14 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "#include <stdint.h>\n"
         "#include <stdlib.h>\n"
         "#include <string.h>\n\n"
-        "typedef struct { void *items; size_t count; } KArr;\n\n"
+        "typedef struct { void *items; size_t count; } KArr;\n"
+        "static void *k_arr_index(KArr array, int64_t index, size_t item_size) {\n"
+        "    if (index < 0 || (uint64_t)index >= array.count) {\n"
+        "        fprintf(stderr, \"kratos: array index out of bounds\\n\");\n"
+        "        exit(EXIT_FAILURE);\n"
+        "    }\n"
+        "    return (char *)array.items + (size_t)index * item_size;\n"
+        "}\n\n"
         "KArr k_arr_from_values(const int64_t *values, size_t count) {\n"
         "    KArr result;\n"
         "    result.count = count;\n"
@@ -578,11 +619,36 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         out
     );
 
+    /* Record typedefs */
+    for (size_t i = 0; i < program->as.program.declarations.count; i++) {
+        const AstNode *node = program->as.program.declarations.items[i];
+        if (node->kind == AST_RECORD_DECL) {
+            fprintf(out, "typedef struct krec_%s krec_%s;\n",
+                    node->as.record_decl.name, node->as.record_decl.name);
+        }
+    }
+    fputc('\n', out);
+
+    /* Record struct definitions */
+    for (size_t i = 0; i < program->as.program.declarations.count; i++) {
+        const AstNode *node = program->as.program.declarations.items[i];
+        if (node->kind == AST_RECORD_DECL) {
+            fprintf(out, "struct krec_%s {\n", node->as.record_decl.name);
+            for (size_t f = 0; f < node->as.record_decl.fields.count; f++) {
+                const AstNode *field = node->as.record_decl.fields.items[f];
+                fputs("    ", out);
+                emit_c_type(out, field->as.record_field.type, field->as.record_field.is_array, field->as.record_field.record_name);
+                fprintf(out, " %s;\n", field->as.record_field.name);
+            }
+            fputs("};\n\n", out);
+        }
+    }
+
     int has_main = 0;
     for (size_t i = 0; i < program->as.program.declarations.count; i++) {
         const AstNode *node = program->as.program.declarations.items[i];
         if (node->kind == AST_FUNC_DECL) {
-            emit_c_type(out, node->as.func_decl.return_type, 0);
+            emit_c_type(out, node->as.func_decl.return_type, 0, node->as.func_decl.return_record_name);
             fprintf(out, " kfn_%s(", node->as.func_decl.name);
             if (node->as.func_decl.params.count == 0) {
                 fputs("void", out);
@@ -591,7 +657,8 @@ int codegen_emit_c(const AstNode *program, FILE *out)
                     if (p > 0) {
                         fputs(", ", out);
                     }
-                    emit_c_type(out, node->as.func_decl.params.items[p]->as.param.type, 0);
+                    AstNode *param = node->as.func_decl.params.items[p];
+                    emit_c_type(out, param->as.param.type, param->as.param.is_array, param->as.param.record_name);
                 }
             }
             fputs(");\n", out);
@@ -605,7 +672,7 @@ int codegen_emit_c(const AstNode *program, FILE *out)
     for (size_t i = 0; i < program->as.program.declarations.count; i++) {
         const AstNode *node = program->as.program.declarations.items[i];
         if (node->kind == AST_VAR_DECL) {
-            emit_c_type(out, node->as.var_decl.type, node->as.var_decl.is_array);
+            emit_c_type(out, node->as.var_decl.type, node->as.var_decl.is_array, node->as.var_decl.record_name);
             fprintf(out, " %s;\n", node->as.var_decl.name);
         }
     }
