@@ -28,6 +28,13 @@ Functions are not first-class values. There is no overloading. Source is ASCII.
 - `wield "path";` at top level, resolved relative to the current file;
 - `kratosc --emit-c` writes a C translation.
 
+## Language freeze 0.1.0
+
+Version 0.1.0 freezes the implemented grammar in
+[specification.md](specification.md). Keywords, `$ ... $` comments, and
+operator spellings will not change without a version bump. Editor tooling
+and later compiler stages should treat that document as the source of truth.
+
 ## Development Stages
 
 1. Lexical rules and diagnostics. **Done.**

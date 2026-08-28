@@ -6,12 +6,24 @@ Version **0.1.0**. This document describes the language as implemented by
 
 ## Versioning
 
-0.1.0 is the first numbered language snapshot. Later versions may extend the
-grammar; breaking changes should bump the minor or major number once 1.0.0
-exists.
+0.1.0 is the first numbered language snapshot. This grammar and keyword set
+are **frozen**: later versions may extend the language, but breaking changes
+must bump the version (minor or major once 1.0.0 exists).
 
 Implemented behavior is defined by the compiler sources, the tests in
 `tests/` and `examples/`, and this specification.
+
+## Language freeze 0.1.0
+
+The following spellings are part of 0.1.0 and must not change without a
+version bump:
+
+- types: `k_int`, `k_float`, `k_bool`, `k_char`, `k_string`, `k_const`, `k_void`;
+- control: `if`, `elif`, `else`;
+- loops: `hold`, `press`, `drive`, `sweep`, `snap`, `push`, and `in`;
+- actions: `craft`, `yield`, `shout`, `wield`;
+- literals and logic: `true`, `false`, `not` (a lone `!` is a lexical error);
+- comments: matching `$ ... $` (not `//`).
 
 ## Lexical Model
 
@@ -101,8 +113,13 @@ source -> lexer -> parser/AST -> semantic analysis -> interpreter
                                               \-> --emit-c
 ```
 
-Diagnostics include a source line. Parse errors set a flag and continue with
+Diagnostics use rustc-style reports (`error[Knnn]`) with file, line, column,
+a source snippet, and an optional help note. Codes are listed in
+[diagnostics.md](diagnostics.md). Parse errors set a flag and continue with
 minimal panic recovery; the AST is not executed if that flag is set.
+
+`kratosc --check` runs the lexer, parser, and semantic analyzer and then
+stops (it does not interpret or emit C).
 
 ## Semantic Rules
 

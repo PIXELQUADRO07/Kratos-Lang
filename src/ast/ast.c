@@ -70,7 +70,19 @@ static AstNode *new_node(AstNodeKind kind, size_t line)
 
     node->kind = kind;
     node->line = line;
+    node->column = 1;
+    node->length = 1;
     return node;
+}
+
+void ast_set_span(AstNode *node, size_t line, size_t column, size_t length)
+{
+    if (node == NULL) {
+        return;
+    }
+    node->line = line;
+    node->column = column == 0 ? 1 : column;
+    node->length = length == 0 ? 1 : length;
 }
 
 /* --- Costruttori --- */

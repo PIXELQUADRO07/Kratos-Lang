@@ -97,9 +97,19 @@ typedef struct {
     size_t length;
 
     /*
-     * Numero di riga nel file sorgente.
+     * Numero di riga nel file sorgente (1-based).
      */
     size_t line;
+
+    /*
+     * Colonna del primo carattere del token (1-based).
+     */
+    size_t column;
+
+    /*
+     * Per TOKEN_ERROR: codice diagnostico K1xx. Altrimenti 0.
+     */
+    int error_code;
 } Token;
 
 

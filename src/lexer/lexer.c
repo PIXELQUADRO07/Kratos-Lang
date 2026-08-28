@@ -1,9 +1,45 @@
 #include "lexer.h"
+#include "diag/diag.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+
+static size_t column_at(const Lexer *lexer, size_t index)
+{
+    size_t column = 1;
+    for (size_t i = 0; i < index; i++) {
+        if (lexer->source[i] == '\n') {
+            column = 1;
+        } else {
+            column++;
+        }
+    }
+    return column;
+}
+
+
+static Token make_token(Lexer *lexer, TokenType type, size_t start, size_t length, size_t line)
+{
+    Token token;
+    token.type = type;
+    token.start = lexer->source + start;
+    token.length = length;
+    token.line = line;
+    token.column = column_at(lexer, start);
+    token.error_code = 0;
+    return token;
+}
+
+
+static Token make_error_token(Lexer *lexer, size_t start, size_t length, size_t line, int error_code)
+{
+    Token token = make_token(lexer, TOKEN_ERROR, start, length, line);
+    token.error_code = error_code;
+    return token;
+}
 
 
 static char current_char(Lexer *lexer)
@@ -196,12 +232,7 @@ static Token lexer_number(Lexer *lexer)
         }
     }
 
-    return (Token) {
-        type,
-        lexer->source + start,
-        lexer->position - start,
-        lexer->line
-    };
+    return make_token(lexer, type, start, lexer->position - start, lexer->line);
 }
 
 
@@ -246,12 +277,7 @@ static Token lexer_string(Lexer *lexer)
                 if (current_char(lexer) != '\0') {
                     advance(lexer);
                 }
-                return (Token){
-                    TOKEN_ERROR,
-                    lexer->source + esc_start,
-                    lexer->position - esc_start,
-                    start_line
-                };
+                return make_error_token(lexer, esc_start, lexer->position - esc_start, start_line, DIAG_K104);
             }
             continue;
         }
@@ -260,22 +286,11 @@ static Token lexer_string(Lexer *lexer)
     }
 
     if (current_char(lexer) != '"') {
-        return (Token){
-            TOKEN_ERROR,
-            lexer->source + start,
-            lexer->position - start,
-            start_line
-        };
+        return make_error_token(lexer, start, lexer->position - start, start_line, DIAG_K102);
     }
 
     advance(lexer);
-
-    return (Token){
-        TOKEN_STRING_LITERAL,
-        lexer->source + start,
-        lexer->position - start,
-        start_line
-    };
+    return make_token(lexer, TOKEN_STRING_LITERAL, start, lexer->position - start, start_line);
 }
 
 
@@ -291,34 +306,18 @@ static Token lexer_char(Lexer *lexer)
             if (current_char(lexer) != '\0') {
                 advance(lexer);
             }
-            return (Token){
-                TOKEN_ERROR,
-                lexer->source + start,
-                lexer->position - start,
-                start_line
-            };
+            return make_error_token(lexer, start, lexer->position - start, start_line, DIAG_K103);
         }
     } else if (current_char(lexer) != '\0' && current_char(lexer) != '\n') {
         advance(lexer);
     }
 
     if (current_char(lexer) != '\'') {
-        return (Token){
-            TOKEN_ERROR,
-            lexer->source + start,
-            lexer->position - start,
-            start_line
-        };
+        return make_error_token(lexer, start, lexer->position - start, start_line, DIAG_K103);
     }
 
     advance(lexer);
-
-    return (Token){
-        TOKEN_CHAR_LITERAL,
-        lexer->source + start,
-        lexer->position - start,
-        start_line
-    };
+    return make_token(lexer, TOKEN_CHAR_LITERAL, start, lexer->position - start, start_line);
 }
 
 
@@ -328,12 +327,7 @@ Token lexer_next_token(Lexer *lexer)
 
     if (lexer->unterminated_comment) {
         lexer->unterminated_comment = 0;
-        return (Token){
-            TOKEN_ERROR,
-            lexer->source + lexer->position,
-            0,
-            lexer->line
-        };
+        return make_error_token(lexer, lexer->position, 1, lexer->line, DIAG_K101);
     }
 
     char c = current_char(lexer);
@@ -342,12 +336,7 @@ Token lexer_next_token(Lexer *lexer)
      * Fine del file.
      */
     if (c == '\0') {
-        return (Token){
-            TOKEN_EOF,
-            lexer->source + lexer->position,
-            0,
-            lexer->line
-        };
+        return make_token(lexer, TOKEN_EOF, lexer->position, 0, lexer->line);
     }
 
 
@@ -373,16 +362,13 @@ Token lexer_next_token(Lexer *lexer)
 
         size_t length = lexer->position - start;
 
-        return (Token){
-            identifier_type(
-                lexer->source + start,
-                length
-            ),
-
-            lexer->source + start,
+        return make_token(
+            lexer,
+            identifier_type(lexer->source + start, length),
+            start,
             length,
             lexer->line
-        };
+        );
     }
 
 
@@ -423,7 +409,7 @@ Token lexer_next_token(Lexer *lexer)
                     break;
                 }
                 /* '!' da solo non e' un operatore valido: la negazione logica e' "not". */
-                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+                return make_error_token(lexer, start, 1, lexer->line, DIAG_K105);
 
             case '<':
                 advance(lexer);
@@ -441,7 +427,7 @@ Token lexer_next_token(Lexer *lexer)
                     type = TOKEN_AND;
                     break;
                 }
-                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+                return make_error_token(lexer, start, 1, lexer->line, DIAG_K105);
 
             case '|':
                 advance(lexer);
@@ -449,7 +435,7 @@ Token lexer_next_token(Lexer *lexer)
                     type = TOKEN_OR;
                     break;
                 }
-                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+                return make_error_token(lexer, start, 1, lexer->line, DIAG_K105);
 
             case '+': advance(lexer); type = TOKEN_PLUS; break;
             case '-': advance(lexer); type = TOKEN_MINUS; break;
@@ -475,15 +461,10 @@ Token lexer_next_token(Lexer *lexer)
                  * Lo consumiamo e restituiamo TOKEN_ERROR.
                  */
                 advance(lexer);
-                return (Token){ TOKEN_ERROR, lexer->source + start, 1, lexer->line };
+                return make_error_token(lexer, start, 1, lexer->line, DIAG_K105);
         }
 
-        return (Token){
-            type,
-            lexer->source + start,
-            lexer->position - start,
-            lexer->line
-        };
+        return make_token(lexer, type, start, lexer->position - start, lexer->line);
     }
 }
 

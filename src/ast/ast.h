@@ -8,9 +8,8 @@
 
 /*
  * Tipi di dato di Kratos come li vede l'AST (indipendenti dai token del
- * lexer). k_void esiste solo come tipo di ritorno di una "craft" e non e'
- * ancora un token del lexer: il parser lo ricava dalla keyword "k_void"
- * quando verra' aggiunta.
+ * lexer). k_void e' riconosciuto dal lexer (TOKEN_K_VOID) e, a livello
+ * semantico, e' ammesso solo come tipo di ritorno di una "craft".
  */
 typedef enum {
     KRATOS_TYPE_INT,
@@ -151,8 +150,10 @@ void ast_node_list_free(AstNodeList *list);
 struct AstNode {
     AstNodeKind kind;
 
-    /* Riga sorgente del token principale del nodo, per i messaggi diagnostici. */
+    /* Span del token principale del nodo, per i messaggi diagnostici. */
     size_t line;
+    size_t column;
+    size_t length;
 
     union {
         /* AST_PROGRAM */
@@ -351,5 +352,7 @@ const char *kratos_type_name(KratosType type);
  * parser: utile finche' non esiste ancora un semantic analyzer.
  */
 void ast_print(const AstNode *node, int indent);
+
+void ast_set_span(AstNode *node, size_t line, size_t column, size_t length);
 
 #endif
