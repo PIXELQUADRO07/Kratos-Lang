@@ -29,7 +29,8 @@ Indexed assignment (`Lista[0] = 1`) is **Implemented**.
 | `AND`, `OR` | `&&`, `\|\|` |
 | `NOT` | `not` |
 
-`&&` and `||` require `k_bool` operands and **short-circuit**.
+`&&` and `||` require `k_bool` operands and **short-circuit**. `+` also
+concatenates two `k_string` values.
 
 ## Precedence (low to high)
 

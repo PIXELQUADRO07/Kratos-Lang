@@ -240,6 +240,27 @@ static Value numeric_promote_left(Value left, Value right)
 }
 
 
+static Value concat_strings(Value left, Value right)
+{
+    const char *left_text = left.as.s != NULL ? left.as.s : "";
+    const char *right_text = right.as.s != NULL ? right.as.s : "";
+    size_t left_length = strlen(left_text);
+    size_t right_length = strlen(right_text);
+    char *text = malloc(left_length + right_length + 1);
+    if (text == NULL) {
+        fprintf(stderr, "kratos: memoria esaurita\n");
+        exit(EXIT_FAILURE);
+    }
+    memcpy(text, left_text, left_length);
+    memcpy(text + left_length, right_text, right_length + 1);
+
+    Value result = val_void();
+    result.kind = VAL_STRING;
+    result.as.s = text;
+    return result;
+}
+
+
 static void shout_value(Value value)
 {
     switch (value.kind) {
@@ -434,6 +455,13 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 value_free(left);
                 value_free(right);
                 return val_void();
+            }
+
+            if (op == TOKEN_PLUS && left.kind == VAL_STRING && right.kind == VAL_STRING) {
+                Value result = concat_strings(left, right);
+                value_free(left);
+                value_free(right);
+                return result;
             }
 
             if (op == TOKEN_EQUAL || op == TOKEN_NOT_EQUAL) {

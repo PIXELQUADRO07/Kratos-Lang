@@ -295,6 +295,11 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
 
             TypeInfo right = check_expr(analyzer, node->as.binary_expr.right);
 
+            if (op == TOKEN_PLUS && !left.is_array && !right.is_array &&
+                left.type == KRATOS_TYPE_STRING && right.type == KRATOS_TYPE_STRING) {
+                return type_info(KRATOS_TYPE_STRING, 0);
+            }
+
             if (op == TOKEN_EQUAL || op == TOKEN_NOT_EQUAL) {
                 if (left.is_array || right.is_array || !types_equal(left, right)) {
                     semantic_error(analyzer, node->line, "confronto tra tipi incompatibili");

@@ -177,6 +177,17 @@ int main(void)
     expect_true(interp_run(lengths) == 0, "interp len builtin");
     ast_free(lengths);
 
+    AstNode *strings = parse_source(
+        "k_string left = \"hello, \";\n"
+        "k_string right = \"Kratos\";\n"
+        "k_void craft main() { shout(left + right); }\n",
+        &had_error
+    );
+    expect_true(!had_error, "parser string concatenation");
+    expect_true(semantic_analyze(strings, NULL) == 0, "semantic string concatenation");
+    expect_true(interp_run(strings) == 0, "interp string concatenation");
+    ast_free(strings);
+
     if (g_failed != 0) {
         fprintf(stderr, "%d failed, %d passed\n", g_failed, g_passed);
         return 1;

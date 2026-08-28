@@ -144,11 +144,19 @@ static void emit_expr(Emitter *e, const AstNode *node)
             break;
 
         case AST_BINARY_EXPR:
-            fputc('(', e->out);
-            emit_expr(e, node->as.binary_expr.left);
-            emit_binary_op(e->out, node->as.binary_expr.operator);
-            emit_expr(e, node->as.binary_expr.right);
-            fputc(')', e->out);
+            if (node->as.binary_expr.operator == TOKEN_PLUS) {
+                fputs("k_plus(", e->out);
+                emit_expr(e, node->as.binary_expr.left);
+                fputs(", ", e->out);
+                emit_expr(e, node->as.binary_expr.right);
+                fputc(')', e->out);
+            } else {
+                fputc('(', e->out);
+                emit_expr(e, node->as.binary_expr.left);
+                emit_binary_op(e->out, node->as.binary_expr.operator);
+                emit_expr(e, node->as.binary_expr.right);
+                fputc(')', e->out);
+            }
             break;
 
         case AST_CALL_EXPR:
@@ -431,6 +439,21 @@ int codegen_emit_c(const AstNode *program, FILE *out)
         "    }\n"
         "    printf(\"]\\n\");\n"
         "}\n"
+        "static const char *k_concat(const char *left, const char *right) {\n"
+        "    size_t left_len = strlen(left ? left : \"\");\n"
+        "    size_t right_len = strlen(right ? right : \"\");\n"
+        "    char *result = malloc(left_len + right_len + 1);\n"
+        "    if (!result) exit(EXIT_FAILURE);\n"
+        "    memcpy(result, left ? left : \"\", left_len);\n"
+        "    memcpy(result + left_len, right ? right : \"\", right_len + 1);\n"
+        "    return result;\n"
+        "}\n"
+        "static double k_plus_numeric(double left, double right) { return left + right; }\n"
+        "#define k_plus(left, right) _Generic((left), \\\n"
+        "    char *: k_concat, \\\n"
+        "    const char *: k_concat, \\\n"
+        "    default: k_plus_numeric \\\n"
+        ")(left, right)\n"
         "static int64_t k_len_string(const char *v) { return (int64_t)strlen(v ? v : \"\"); }\n"
         "static int64_t k_len_array(KArr v) { return (int64_t)v.count; }\n"
         "#define k_len(v) _Generic((v), \\\n"

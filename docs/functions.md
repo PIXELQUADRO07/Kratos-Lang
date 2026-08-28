@@ -12,6 +12,8 @@ Function syntax is **Implemented**.
 `len(value)` is a built-in expression returning a `k_int` for strings and
 arrays.
 
+String concatenation uses `+`, for example `"hello, " + name`.
+
 ## Function Declaration
 
 The return type comes first, followed by `craft`, the function name, and a
