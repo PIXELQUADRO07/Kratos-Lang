@@ -13,7 +13,8 @@ typedef enum {
     VAL_CHAR,
     VAL_STRING,
     VAL_VOID,
-    VAL_ARRAY
+    VAL_ARRAY,
+    VAL_RECORD
 } ValueKind;
 
 typedef struct Value Value;
@@ -31,6 +32,12 @@ struct Value {
             Value *items;
             size_t count;
         } array;
+        struct {
+            char *name;
+            char **field_names;
+            Value *field_values;
+            size_t field_count;
+        } record;
     } as;
 };
 
@@ -114,6 +121,14 @@ static void value_free(Value value)
             value_free(value.as.array.items[i]);
         }
         free(value.as.array.items);
+    } else if (value.kind == VAL_RECORD) {
+        free(value.as.record.name);
+        for (size_t i = 0; i < value.as.record.field_count; i++) {
+            free(value.as.record.field_names[i]);
+            value_free(value.as.record.field_values[i]);
+        }
+        free(value.as.record.field_names);
+        free(value.as.record.field_values);
     }
 }
 
@@ -139,13 +154,25 @@ static Value value_clone(Value value)
         return copy;
     }
 
+    if (value.kind == VAL_RECORD) {
+        Value copy = value;
+        copy.as.record.name = kratos_copy_string(value.as.record.name);
+        copy.as.record.field_names = calloc(value.as.record.field_count > 0 ? value.as.record.field_count : 1, sizeof(char *));
+        copy.as.record.field_values = calloc(value.as.record.field_count > 0 ? value.as.record.field_count : 1, sizeof(Value));
+        for (size_t i = 0; i < value.as.record.field_count; i++) {
+            copy.as.record.field_names[i] = kratos_copy_string(value.as.record.field_names[i]);
+            copy.as.record.field_values[i] = value_clone(value.as.record.field_values[i]);
+        }
+        return copy;
+    }
+
     return value;
 }
 
 
 static void runtime_error(Interp *interp, size_t line, const char *message)
 {
-    fprintf(stderr, "kratos: errore di runtime alla riga %zu: %s\n", line, message);
+    fprintf(stderr, "kratos (runtime) [line %zu]: %s\n", line, message);
     interp->had_error = 1;
 }
 
@@ -153,9 +180,9 @@ static void runtime_error(Interp *interp, size_t line, const char *message)
 static Binding *env_find(Env *env, const char *name)
 {
     for (Env *current = env; current != NULL; current = current->parent) {
-        for (Binding *b = current->bindings; b != NULL; b = b->next) {
-            if (strcmp(b->name, name) == 0) {
-                return b;
+        for (Binding *binding = current->bindings; binding != NULL; binding = binding->next) {
+            if (strcmp(binding->name, name) == 0) {
+                return binding;
             }
         }
     }
@@ -180,13 +207,13 @@ static void env_define(Env *env, const char *name, int is_const, Value value)
 
 static void env_free_bindings(Env *env)
 {
-    Binding *b = env->bindings;
-    while (b != NULL) {
-        Binding *next = b->next;
-        free(b->name);
-        value_free(b->value);
-        free(b);
-        b = next;
+    Binding *current = env->bindings;
+    while (current != NULL) {
+        Binding *next = current->next;
+        free(current->name);
+        value_free(current->value);
+        free(current);
+        current = next;
     }
     env->bindings = NULL;
 }
@@ -253,6 +280,21 @@ static Value *resolve_assignment_target(Interp *interp, AstNode *target)
         return slot;
     }
 
+    if (target->kind == AST_MEMBER_EXPR) {
+        Value *record_val = resolve_assignment_target(interp, target->as.member_expr.target);
+        if (record_val == NULL || record_val->kind != VAL_RECORD) {
+            runtime_error(interp, target->line, "accesso a membro su non-record");
+            return NULL;
+        }
+        for (size_t i = 0; i < record_val->as.record.field_count; i++) {
+            if (strcmp(record_val->as.record.field_names[i], target->as.member_expr.member) == 0) {
+                return &record_val->as.record.field_values[i];
+            }
+        }
+        runtime_error(interp, target->line, "campo del record non trovato");
+        return NULL;
+    }
+
     runtime_error(interp, target->line, "destinazione di assegnamento non valida");
     return NULL;
 }
@@ -294,26 +336,25 @@ static Value concat_strings(Value left, Value right)
 }
 
 
-static void shout_value(Value value)
+static void print_val_inline(Value value)
 {
     switch (value.kind) {
         case VAL_INT:
-            printf("%lld\n", (long long)value.as.i);
+            printf("%lld", (long long)value.as.i);
             break;
         case VAL_FLOAT:
-            printf("%g\n", value.as.f);
+            printf("%g", value.as.f);
             break;
         case VAL_BOOL:
-            printf("%s\n", value.as.b ? "true" : "false");
+            printf("%s", value.as.b ? "true" : "false");
             break;
         case VAL_CHAR:
-            printf("%c\n", value.as.c);
+            printf("'%c'", value.as.c);
             break;
         case VAL_STRING:
-            printf("%s\n", value.as.s != NULL ? value.as.s : "");
+            printf("\"%s\"", value.as.s != NULL ? value.as.s : "");
             break;
         case VAL_VOID:
-            printf("\n");
             break;
         case VAL_ARRAY:
             printf("[");
@@ -321,29 +362,36 @@ static void shout_value(Value value)
                 if (i > 0) {
                     printf(", ");
                 }
-                switch (value.as.array.items[i].kind) {
-                    case VAL_INT:
-                        printf("%lld", (long long)value.as.array.items[i].as.i);
-                        break;
-                    case VAL_FLOAT:
-                        printf("%g", value.as.array.items[i].as.f);
-                        break;
-                    case VAL_BOOL:
-                        printf("%s", value.as.array.items[i].as.b ? "true" : "false");
-                        break;
-                    case VAL_CHAR:
-                        printf("'%c'", value.as.array.items[i].as.c);
-                        break;
-                    case VAL_STRING:
-                        printf("\"%s\"", value.as.array.items[i].as.s != NULL ? value.as.array.items[i].as.s : "");
-                        break;
-                    default:
-                        printf("?");
-                        break;
-                }
+                print_val_inline(value.as.array.items[i]);
             }
-            printf("]\n");
+            printf("]");
             break;
+        case VAL_RECORD:
+            printf("%s { ", value.as.record.name != NULL ? value.as.record.name : "record");
+            for (size_t i = 0; i < value.as.record.field_count; i++) {
+                if (i > 0) {
+                    printf(", ");
+                }
+                printf("%s: ", value.as.record.field_names[i]);
+                print_val_inline(value.as.record.field_values[i]);
+            }
+            printf(" }");
+            break;
+    }
+}
+
+static void shout_value(Value value)
+{
+    if (value.kind == VAL_RECORD) {
+        print_val_inline(value);
+        printf("\n");
+    } else if (value.kind == VAL_STRING) {
+        printf("%s\n", value.as.s != NULL ? value.as.s : "");
+    } else if (value.kind == VAL_CHAR) {
+        printf("%c\n", value.as.c);
+    } else {
+        print_val_inline(value);
+        printf("\n");
     }
 }
 
@@ -776,6 +824,40 @@ static Value eval_expr(Interp *interp, AstNode *node)
             value_free(array);
             value_free(index);
             return result;
+        }
+
+        case AST_RECORD_LITERAL: {
+            Value rec = val_void();
+            rec.kind = VAL_RECORD;
+            rec.as.record.name = kratos_copy_string(node->as.record_literal.name);
+            rec.as.record.field_count = node->as.record_literal.fields.count;
+            rec.as.record.field_names = calloc(rec.as.record.field_count > 0 ? rec.as.record.field_count : 1, sizeof(char *));
+            rec.as.record.field_values = calloc(rec.as.record.field_count > 0 ? rec.as.record.field_count : 1, sizeof(Value));
+            for (size_t i = 0; i < rec.as.record.field_count; i++) {
+                AstNode *fi = node->as.record_literal.fields.items[i];
+                rec.as.record.field_names[i] = kratos_copy_string(fi->as.field_init.name);
+                rec.as.record.field_values[i] = eval_expr(interp, fi->as.field_init.value);
+            }
+            return rec;
+        }
+
+        case AST_MEMBER_EXPR: {
+            Value rec = eval_expr(interp, node->as.member_expr.target);
+            if (rec.kind != VAL_RECORD) {
+                runtime_error(interp, node->line, "accesso a membro di non-record");
+                value_free(rec);
+                return val_void();
+            }
+            for (size_t i = 0; i < rec.as.record.field_count; i++) {
+                if (strcmp(rec.as.record.field_names[i], node->as.member_expr.member) == 0) {
+                    Value result = value_clone(rec.as.record.field_values[i]);
+                    value_free(rec);
+                    return result;
+                }
+            }
+            runtime_error(interp, node->line, "campo del record non trovato");
+            value_free(rec);
+            return val_void();
         }
 
         default:
