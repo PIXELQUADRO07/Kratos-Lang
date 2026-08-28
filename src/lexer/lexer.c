@@ -187,6 +187,9 @@ static TokenType identifier_type(const char *start, size_t length)
     if (length == 5 && strncmp(start, "wield", 5) == 0)
         return TOKEN_WIELD;
 
+    if (length == 6 && strncmp(start, "record", 6) == 0)
+        return TOKEN_RECORD;
+
     if (length == 4 && strncmp(start, "true", 4) == 0)
         return TOKEN_TRUE;
 
@@ -476,6 +479,7 @@ Token lexer_next_token(Lexer *lexer)
             case ';': advance(lexer); type = TOKEN_SEMICOLON; break;
             case ',': advance(lexer); type = TOKEN_COMMA; break;
             case '.': advance(lexer); type = TOKEN_DOT; break;
+            case ':': advance(lexer); type = TOKEN_COLON; break;
 
             default:
                 /*
@@ -568,6 +572,9 @@ const char *token_type_name(TokenType type)
         case TOKEN_WIELD:
             return "WIELD";
 
+        case TOKEN_RECORD:
+            return "RECORD";
+
         case TOKEN_INTEGER:
             return "INTEGER";
 
@@ -657,6 +664,9 @@ const char *token_type_name(TokenType type)
 
         case TOKEN_DOT:
             return "DOT";
+
+        case TOKEN_COLON:
+            return "COLON";
     }
 
     return "UNKNOWN";

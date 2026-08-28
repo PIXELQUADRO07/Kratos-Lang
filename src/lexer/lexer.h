@@ -37,6 +37,7 @@ typedef enum {
     TOKEN_YIELD,
     TOKEN_SHOUT,
     TOKEN_WIELD,
+    TOKEN_RECORD,
 
     /* Valori */
     TOKEN_INTEGER,
@@ -75,7 +76,8 @@ typedef enum {
 
     TOKEN_SEMICOLON,
     TOKEN_COMMA,
-    TOKEN_DOT
+    TOKEN_DOT,
+    TOKEN_COLON
 } TokenType;
 
 
