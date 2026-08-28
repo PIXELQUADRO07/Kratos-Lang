@@ -16,7 +16,7 @@ DIAGNOSTIC_RE = re.compile(
 COMPLETION_WORDS = (
     "k_int", "k_float", "k_bool", "k_char", "k_string", "k_const", "k_void",
     "if", "elif", "else", "hold", "press", "drive", "sweep", "in", "snap", "push",
-    "craft", "yield", "shout", "wield", "true", "false", "not",
+    "craft", "yield", "shout", "wield", "true", "false", "not", "record",
 )
 
 HOVER_TEXT = {
@@ -36,6 +36,7 @@ HOVER_TEXT = {
     "k_string": "String type.",
     "k_const": "Declares a value that cannot be reassigned.",
     "k_void": "The no-value return type for a craft.",
+    "record": "`record Name { type field; ... }` declares a composite record type (struct).",
 }
 
 
