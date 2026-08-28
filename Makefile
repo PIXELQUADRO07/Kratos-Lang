@@ -13,19 +13,29 @@ LIB_SOURCES = \
 
 SOURCES = src/main.c $(LIB_SOURCES)
 TEST_SOURCES = tests/test_unit.c $(LIB_SOURCES)
+LIB_OBJECTS = $(LIB_SOURCES:.c=.o)
 
 TARGET = kratosc
 TEST_TARGET = tests/test_unit
+LIB_TARGET = libkratos.a
 
-.PHONY: all clean run test
+.PHONY: all clean run test library
 
-all: $(TARGET)
+all: $(TARGET) $(LIB_TARGET)
 
 $(TARGET): $(SOURCES)
-	$(CC) $(CFLAGS) -Isrc $(SOURCES) -o $(TARGET)
+	$(CC) $(CFLAGS) -Isrc -Iinclude $(SOURCES) -o $(TARGET)
+
+$(LIB_TARGET): $(LIB_OBJECTS)
+	ar rcs $@ $^
+
+library: $(LIB_TARGET)
+
+%.o: %.c
+	$(CC) $(CFLAGS) -Isrc -Iinclude -c $< -o $@
 
 $(TEST_TARGET): $(TEST_SOURCES)
-	$(CC) $(CFLAGS) -Isrc $(TEST_SOURCES) -o $(TEST_TARGET)
+	$(CC) $(CFLAGS) -Isrc -Iinclude $(TEST_SOURCES) -o $(TEST_TARGET)
 
 run: $(TARGET)
 	./$(TARGET) examples/hello.kratos
@@ -47,4 +57,4 @@ test: $(TARGET) $(TEST_TARGET)
 	/tmp/kratos_hello_c | grep -q 'Hello, Kratos'
 
 clean:
-	rm -f $(TARGET) $(TEST_TARGET) /tmp/kratos_hello_c /tmp/kratosc_test
+	rm -f $(TARGET) $(TEST_TARGET) $(LIB_TARGET) $(LIB_OBJECTS) /tmp/kratos_hello_c /tmp/kratosc_test
