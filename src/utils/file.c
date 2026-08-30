@@ -13,7 +13,7 @@ char *kratos_copy_string(const char *source)
     size_t length = strlen(source);
     char *copy = malloc(length + 1);
     if (copy == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
     memcpy(copy, source, length + 1);
@@ -47,7 +47,7 @@ char *kratos_read_file(const char *path)
     char *buffer = malloc((size_t)size + 1);
     if (buffer == NULL) {
         fclose(file);
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
 
@@ -76,7 +76,7 @@ char *kratos_dirname_dup(const char *path)
     size_t length = (size_t)(slash - path);
     char *dir = malloc(length + 1);
     if (dir == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
     memcpy(dir, path, length);
@@ -100,7 +100,7 @@ char *kratos_join_path(const char *dir, const char *rel)
     int need_slash = dir[dir_len - 1] != '/';
     char *out = malloc(dir_len + rel_len + (need_slash ? 2 : 1));
     if (out == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
 

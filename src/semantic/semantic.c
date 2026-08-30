@@ -183,7 +183,7 @@ static void scope_add(Analyzer *analyzer, size_t line, const char *name, TypeInf
         size_t new_capacity = analyzer->scope->capacity == 0 ? 8 : analyzer->scope->capacity * 2;
         Symbol *new_items = realloc(analyzer->scope->items, new_capacity * sizeof(Symbol));
         if (new_items == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         analyzer->scope->items = new_items;
@@ -223,7 +223,7 @@ static void record_type_add(Analyzer *analyzer, AstNode *record_node)
         size_t new_capacity = analyzer->record_capacity == 0 ? 4 : analyzer->record_capacity * 2;
         RecordTypeInfo *new_records = realloc(analyzer->records, new_capacity * sizeof(RecordTypeInfo));
         if (new_records == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         analyzer->records = new_records;
@@ -261,7 +261,7 @@ static void record_type_add(Analyzer *analyzer, AstNode *record_node)
             size_t new_cap = rec->field_capacity == 0 ? 4 : rec->field_capacity * 2;
             RecordFieldInfo *new_fields = realloc(rec->fields, new_cap * sizeof(RecordFieldInfo));
             if (new_fields == NULL) {
-                fprintf(stderr, "kratos: memoria esaurita\n");
+                fprintf(stderr, "kratos: out of memory\n");
                 exit(EXIT_FAILURE);
             }
             rec->fields = new_fields;
@@ -529,7 +529,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
                 if (argument.type != KRATOS_TYPE_INT && argument.type != KRATOS_TYPE_FLOAT &&
                     argument.type != KRATOS_TYPE_BOOL && argument.type != KRATOS_TYPE_CHAR &&
                     argument.type != KRATOS_TYPE_STRING) {
-                    semantic_error(analyzer, node->line, "tipo non convertibile");
+                    semantic_error(analyzer, node->line, "value cannot be converted");
                 }
                 return strcmp(node->as.call_expr.callee, "to_int") == 0
                     ? type_info_simple(KRATOS_TYPE_INT, 0) : type_info_simple(KRATOS_TYPE_FLOAT, 0);
@@ -632,7 +632,7 @@ static TypeInfo check_expr(Analyzer *analyzer, AstNode *node)
         case AST_MEMBER_EXPR: {
             TypeInfo target = check_expr(analyzer, node->as.member_expr.target);
             if (target.is_array > 0 || target.type != KRATOS_TYPE_RECORD || target.record_name == NULL) {
-                semantic_error(analyzer, node->line, "accesso a un membro di un tipo non record");
+                semantic_error(analyzer, node->line, "member access on a non-record type");
                 return invalid;
             }
             RecordTypeInfo *rec = record_type_find(analyzer, target.record_name);
@@ -848,7 +848,7 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
                     break;
                 }
                 if (symbol->is_const) {
-                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                    semantic_error(analyzer, node->line, "cannot assign to k_const");
                 }
                 target = symbol->type;
             } else if (node->as.assign.target->kind == AST_INDEX_EXPR) {
@@ -862,18 +862,18 @@ static void check_stmt(Analyzer *analyzer, AstNode *node)
                     semantic_error(analyzer, node->line, "l'indice deve essere k_int");
                 }
                 if (is_node_const(analyzer, array_expr)) {
-                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                    semantic_error(analyzer, node->line, "cannot assign to k_const");
                 }
                 target = type_info(array.type, array.is_array > 0 ? array.is_array - 1 : 0, array.record_name);
             } else if (node->as.assign.target->kind == AST_MEMBER_EXPR) {
                 AstNode *target_expr = node->as.assign.target->as.member_expr.target;
                 TypeInfo rec_target = check_expr(analyzer, target_expr);
                 if (rec_target.is_array > 0 || rec_target.type != KRATOS_TYPE_RECORD || rec_target.record_name == NULL) {
-                    semantic_error(analyzer, node->line, "accesso a campo su un tipo non record");
+                    semantic_error(analyzer, node->line, "field access on a non-record type");
                     break;
                 }
                 if (is_node_const(analyzer, target_expr)) {
-                    semantic_error(analyzer, node->line, "impossibile assegnare a k_const");
+                    semantic_error(analyzer, node->line, "cannot assign to k_const");
                 }
                 RecordTypeInfo *rec = record_type_find(analyzer, rec_target.record_name);
                 if (rec == NULL) {
@@ -972,7 +972,7 @@ static void stack_push(Analyzer *analyzer, const char *path)
         size_t new_capacity = analyzer->wield_stack_capacity == 0 ? 4 : analyzer->wield_stack_capacity * 2;
         char **new_items = realloc(analyzer->wield_stack, new_capacity * sizeof(char *));
         if (new_items == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         analyzer->wield_stack = new_items;

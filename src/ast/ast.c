@@ -19,7 +19,7 @@ void ast_node_list_push(AstNodeList *list, AstNode *node)
         size_t new_capacity = list->capacity == 0 ? 4 : list->capacity * 2;
         AstNode **new_items = realloc(list->items, new_capacity * sizeof(AstNode *));
         if (new_items == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita durante la costruzione dell'AST\n");
+            fprintf(stderr, "kratos: out of memory building the AST\n");
             exit(EXIT_FAILURE);
         }
         list->items = new_items;
@@ -52,7 +52,7 @@ static char *duplicate_string(const char *source)
     size_t length = strlen(source);
     char *copy = malloc(length + 1);
     if (copy == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita durante la costruzione dell'AST\n");
+        fprintf(stderr, "kratos: out of memory building the AST\n");
         exit(EXIT_FAILURE);
     }
 
@@ -64,7 +64,7 @@ static AstNode *new_node(AstNodeKind kind, size_t line)
 {
     AstNode *node = calloc(1, sizeof(AstNode));
     if (node == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita durante la costruzione dell'AST\n");
+        fprintf(stderr, "kratos: out of memory building the AST\n");
         exit(EXIT_FAILURE);
     }
 

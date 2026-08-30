@@ -693,7 +693,7 @@ char *token_decode_string(Token token)
     if (token.length < 2) {
         char *empty = malloc(1);
         if (empty == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         empty[0] = '\0';
@@ -704,7 +704,7 @@ char *token_decode_string(Token token)
     size_t inner_length = token.length - 2;
     char *buffer = malloc(inner_length + 1);
     if (buffer == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
 

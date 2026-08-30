@@ -18,7 +18,7 @@ static char *token_to_cstring(Token token)
 {
     char *buffer = malloc(token.length + 1);
     if (buffer == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita durante il parsing\n");
+        fprintf(stderr, "kratos: out of memory during parsing\n");
         exit(EXIT_FAILURE);
     }
     memcpy(buffer, token.start, token.length);

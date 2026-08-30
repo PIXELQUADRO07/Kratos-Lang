@@ -145,7 +145,7 @@ static Value value_clone(Value value)
         Value copy = value;
         copy.as.array.items = calloc(value.as.array.count, sizeof(Value));
         if (copy.as.array.items == NULL && value.as.array.count > 0) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         for (size_t i = 0; i < value.as.array.count; i++) {
@@ -194,7 +194,7 @@ static void env_define(Env *env, const char *name, int is_const, Value value)
 {
     Binding *binding = malloc(sizeof(Binding));
     if (binding == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
     binding->name = kratos_copy_string(name);
@@ -236,7 +236,7 @@ static void register_function(Interp *interp, AstNode *func)
         size_t new_capacity = interp->function_capacity == 0 ? 8 : interp->function_capacity * 2;
         FuncEntry *new_items = realloc(interp->functions, new_capacity * sizeof(FuncEntry));
         if (new_items == NULL) {
-            fprintf(stderr, "kratos: memoria esaurita\n");
+            fprintf(stderr, "kratos: out of memory\n");
             exit(EXIT_FAILURE);
         }
         interp->functions = new_items;
@@ -271,7 +271,7 @@ static Value *resolve_assignment_target(Interp *interp, AstNode *target)
             return NULL;
         }
         if (index.as.i < 0 || (size_t)index.as.i >= array->as.array.count) {
-            runtime_error(interp, target->line, "indice fuori dai limiti");
+            runtime_error(interp, target->line, "array index out of bounds");
             value_free(index);
             return NULL;
         }
@@ -323,7 +323,7 @@ static Value concat_strings(Value left, Value right)
     size_t right_length = strlen(right_text);
     char *text = malloc(left_length + right_length + 1);
     if (text == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
     memcpy(text, left_text, left_length);
@@ -594,7 +594,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
                 else if (op == TOKEN_STAR) r = x * y;
                 else if (op == TOKEN_SLASH) {
                     if (y == 0.0) {
-                        runtime_error(interp, node->line, "divisione per zero");
+                        runtime_error(interp, node->line, "division by zero");
                     } else {
                         r = x / y;
                     }
@@ -605,7 +605,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
             }
 
             if (op == TOKEN_SLASH && b.as.i == 0) {
-                runtime_error(interp, node->line, "divisione per zero");
+                runtime_error(interp, node->line, "division by zero");
                 value_free(left);
                 value_free(right);
                 return val_int(0);
@@ -676,7 +676,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
                     }
                     char *result_text = malloc(slice_length + 1);
                     if (result_text == NULL) {
-                        fprintf(stderr, "kratos: memoria esaurita\n");
+                        fprintf(stderr, "kratos: out of memory\n");
                         exit(EXIT_FAILURE);
                     }
                     memcpy(result_text, text + start.as.i, slice_length);
@@ -696,7 +696,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
                     result.as.array.count = (size_t)(end.as.i - start.as.i);
                     result.as.array.items = calloc(result.as.array.count, sizeof(Value));
                     if (result.as.array.items == NULL && result.as.array.count > 0) {
-                        fprintf(stderr, "kratos: memoria esaurita\n");
+                        fprintf(stderr, "kratos: out of memory\n");
                         exit(EXIT_FAILURE);
                     }
                     for (size_t i = 0; i < result.as.array.count; i++) {
@@ -735,7 +735,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
                     } else if (argument.kind == VAL_CHAR) {
                         snprintf(buffer, sizeof(buffer), "%c", argument.as.c);
                     } else {
-                        runtime_error(interp, node->line, "tipo non convertibile in k_string");
+                        runtime_error(interp, node->line, "value cannot be converted to k_string");
                     }
                     if (result.kind != VAL_STRING && !interp->had_error) {
                         result.kind = VAL_STRING;
@@ -772,7 +772,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
                         }
                     }
                 } else {
-                    runtime_error(interp, node->line, "tipo non convertibile");
+                    runtime_error(interp, node->line, "value cannot be converted");
                 }
                 value_free(argument);
                 return result;
@@ -791,7 +791,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
             array.as.array.count = node->as.array_literal.elements.count;
             array.as.array.items = calloc(array.as.array.count, sizeof(Value));
             if (array.as.array.items == NULL && array.as.array.count > 0) {
-                fprintf(stderr, "kratos: memoria esaurita\n");
+                fprintf(stderr, "kratos: out of memory\n");
                 exit(EXIT_FAILURE);
             }
             for (size_t i = 0; i < array.as.array.count; i++) {
@@ -817,7 +817,7 @@ static Value eval_expr(Interp *interp, AstNode *node)
             if (array.kind != VAL_ARRAY || index.kind != VAL_INT) {
                 runtime_error(interp, node->line, "indicizzazione non valida");
             } else if (index.as.i < 0 || (size_t)index.as.i >= array.as.array.count) {
-                runtime_error(interp, node->line, "indice fuori dai limiti");
+                runtime_error(interp, node->line, "array index out of bounds");
             } else {
                 result = value_clone(array.as.array.items[index.as.i]);
             }

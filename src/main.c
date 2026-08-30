@@ -36,7 +36,7 @@ static char *read_stdin(void)
     size_t length = 0;
     char *buffer = malloc(capacity);
     if (buffer == NULL) {
-        fprintf(stderr, "kratos: memoria esaurita\n");
+        fprintf(stderr, "kratos: out of memory\n");
         exit(EXIT_FAILURE);
     }
 
@@ -47,7 +47,7 @@ static char *read_stdin(void)
             char *grown = realloc(buffer, capacity);
             if (grown == NULL) {
                 free(buffer);
-                fprintf(stderr, "kratos: memoria esaurita\n");
+                fprintf(stderr, "kratos: out of memory\n");
                 exit(EXIT_FAILURE);
             }
             buffer = grown;
@@ -125,12 +125,12 @@ int main(int argc, char **argv)
             continue;
         }
         if (argv[i][0] == '-') {
-            fprintf(stderr, "kratos: flag sconosciuta '%s'\n", argv[i]);
+            fprintf(stderr, "kratos: unknown flag '%s'\n", argv[i]);
             print_usage(stderr);
             return 2;
         }
         if (path != NULL) {
-            fprintf(stderr, "kratos: un solo file alla volta\n");
+            fprintf(stderr, "kratos: only one input file allowed\n");
             return 2;
         }
         path = argv[i];
@@ -145,7 +145,7 @@ int main(int argc, char **argv)
     if (path != NULL) {
         source = kratos_read_file(path);
         if (source == NULL) {
-            fprintf(stderr, "kratos: impossibile leggere '%s'\n", path);
+            fprintf(stderr, "kratos: cannot read '%s'\n", path);
             return 1;
         }
     } else {

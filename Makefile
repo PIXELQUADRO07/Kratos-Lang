@@ -48,7 +48,7 @@ test: $(TARGET) $(TEST_TARGET)
 	./$(TARGET) examples/short_circuit.kratos | grep -q 'ok'
 	! ./$(TARGET) examples/short_circuit.kratos | grep -q 'boom'
 	./$(TARGET) --ast examples/hello.kratos | grep -q 'FuncDecl main'
-	./$(TARGET) --version | grep -q '^kratosc 0.2.0$$'
+	./$(TARGET) --version | grep -q '^kratosc 0.3.0$$'
 	./$(TARGET) --check examples/hello.kratos | grep -q 'Kratos-Lang: no errors found'
 	! printf 'k_void craft main( {\n' | ./$(TARGET) --check >/dev/null 2>&1
 	./$(TARGET) -o /tmp/kratosc_test examples/hello.kratos
