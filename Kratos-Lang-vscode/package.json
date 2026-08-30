@@ -2,7 +2,7 @@
   "name": "kratos-lang",
   "displayName": "Kratos-Lang",
   "description": "Language support for Kratos-Lang",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "kratos-lang",
   "license": "MIT",
   "engines": {

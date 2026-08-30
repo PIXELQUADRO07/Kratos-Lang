@@ -1,6 +1,6 @@
 # Kratos-Lang for VS Code
 
-Language support for Kratos-Lang 0.2.0.
+Language support for Kratos-Lang 0.3.0.
 
 The extension provides:
 
@@ -16,7 +16,7 @@ package:
 
 ```sh
 vsce package Kratos-Lang-vscode
-code --install-extension kratos-lang-0.2.0.vsix
+code --install-extension kratos-lang-0.3.0.vsix
 ```
 
 For development without packaging, use VS Code's extension development path
