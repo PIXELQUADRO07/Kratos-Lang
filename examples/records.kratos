@@ -1,0 +1,42 @@
+$ records.kratos — demonstrates record types, nested records, arrays of records $
+
+record Point {
+    k_int x;
+    k_int y;
+}
+
+record Line {
+    Point p1;
+    Point p2;
+}
+
+$ value semantics: move_point returns a modified copy $
+Point craft move_point(Point pt, k_int dx, k_int dy) {
+    pt.x = pt.x + dx;
+    pt.y = pt.y + dy;
+    yield pt;
+}
+
+k_void craft main() {
+    $ basic record creation and member access $
+    Point origin = Point { x: 0, y: 0 };
+    shout(origin.x);
+    shout(origin.y);
+
+    $ value semantics: original is not mutated $
+    Point shifted = move_point(origin, 3, 4);
+    shout(shifted.x);
+    shout(shifted.y);
+    shout(origin.x);
+
+    $ nested record $
+    Line seg = Line { p1: Point { x: 1, y: 2 }, p2: Point { x: 5, y: 6 } };
+    shout(seg.p1.x);
+    shout(seg.p2.y);
+
+    $ array of records $
+    Point[] pts = [Point { x: 10, y: 20 }, Point { x: 30, y: 40 }];
+    shout(pts[0].x);
+    shout(pts[1].y);
+    shout(len(pts));
+}
