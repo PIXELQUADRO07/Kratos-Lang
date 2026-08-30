@@ -1,8 +1,8 @@
 # Kratos Lang Specification
 
-Version **0.2.0**. This document describes the language as implemented by
+Version **0.3.0**. This document describes the language as implemented by
 `kratosc` in this repository. Behavior marked **Planned** is not required of
-0.2.0 implementations.
+0.3.0 implementations.
 
 ## Records
 
@@ -50,9 +50,9 @@ must bump the version (minor or major once 1.0.0 exists).
 Implemented behavior is defined by the compiler sources, the tests in
 `tests/` and `examples/`, and this specification.
 
-## Language version 0.2.0
+## Language version 0.3.0
 
-The following spellings are part of 0.2.0 and must not change without a
+The following spellings are part of 0.3.0 and must not change without a
 version bump:
 
 - types: `k_int`, `k_float`, `k_bool`, `k_char`, `k_string`, `k_const`, `k_void`;
@@ -187,5 +187,5 @@ the interpreter and in the C backend before dereferencing.
 
 ## Conformance Requirements
 
-An implementation of 0.2.0 should match this grammar, the semantic rules
+An implementation of 0.3.0 should match this grammar, the semantic rules
 above, and the tests invoked by `make test`.
